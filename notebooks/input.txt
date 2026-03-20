@@ -1,0 +1,17 @@
+[INPUT_DATA]
+path = /home/jeandet/Documents/DATA/Pauline/
+cycle = cycle_0
+sim_type = OCA_CGL2
+
+[OUTPUT_DATA]
+path = ./
+name = OCA_CGL2_cycle0_completeInc
+reduction_type = "trunc" ou "bin"
+reduction = [[0,0,0],[127,296,127]]
+laws = ['SS22I', 'BG17']
+terms = ['flux_dvdvdv']
+quantities = ['Iv']
+
+[PHYSICAL_PARAMS]
+di = 1
+eta = 1e-7

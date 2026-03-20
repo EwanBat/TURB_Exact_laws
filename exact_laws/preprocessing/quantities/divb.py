@@ -1,5 +1,6 @@
 import numpy as np
 import numexpr as ne
+from .b import get_original_quantity
 
 from ...mathematical_tools import derivation
 
@@ -18,12 +19,10 @@ class DivB:
                 period = True
             )
         else:
+            if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
+                get_original_quantity(dic_quant, dic_param)
             divb = derivation.div(
-                [
-                    ne.evaluate("bx/sqrt(rho)", local_dict=dic_quant),
-                    ne.evaluate("by/sqrt(rho)", local_dict=dic_quant),
-                    ne.evaluate("bz/sqrt(rho)", local_dict=dic_quant),
-                ],
+                [dic_quant[f"vax"], dic_quant[f"vay"], dic_quant[f"vaz"]],
                 dic_param["c"],
                 precision = 4,
                 period = True,

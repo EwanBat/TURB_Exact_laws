@@ -2,7 +2,7 @@ import numpy as np
 import numexpr as ne
 
 from ...mathematical_tools import derivation
-from .j import J
+from .j import get_original_quantity
 
 class DivJ:
     def __init__(self, incompressible=False):
@@ -10,10 +10,10 @@ class DivJ:
         self.incompressible = incompressible
 
     def create_datasets(self, file, dic_quant, dic_param):
-        if not ("jx" in dic_quant.keys() or "jy" in dic_quant.keys() or "jz" in dic_quant.keys()):
-            J.get_original_quantity(dic_quant, dic_param)
             
         if self.incompressible:
+            if not ("jx" in dic_quant.keys() or "jy" in dic_quant.keys() or "jz" in dic_quant.keys()):
+                get_original_quantity(dic_quant, dic_param)
             divj = derivation.div(
                 [dic_quant['jx'], dic_quant['jy'], dic_quant['jz']],
                 dic_param["c"],
@@ -22,12 +22,10 @@ class DivJ:
             )
             
         else:
+            if not ("jcx" in dic_quant.keys() or "jcy" in dic_quant.keys() or "jcz" in dic_quant.keys()):
+                get_original_quantity(dic_quant, dic_param, inc=False)
             divj = derivation.div(
-                [
-                    ne.evaluate("jx/rho", local_dict=dic_quant),
-                    ne.evaluate("jy/rho", local_dict=dic_quant),
-                    ne.evaluate("jz/rho", local_dict=dic_quant),
-                ],
+                [dic_quant['jcx'], dic_quant['jcy'], dic_quant['jcz']],
                 dic_param["c"],
                 precision = 4,
                 period = True,
