@@ -8,9 +8,14 @@ class Backup():
     
     def configure(self,config,time,rank):
         if config is None:
+            # Créer le dossier 'backup' s'il n'existe pas
+            backup_root = "./backup"
             if rank == 0:
-                os.mkdir(f"./backup_{time.strftime('%d%m%Y_%H%M%S')}")  # creation of a recording folder
-            self.folder = f"./backup_{time.strftime('%d%m%Y_%H%M%S')}/"
+                os.makedirs(backup_root, exist_ok=True)
+                # Créer le dossier timestampé dans backup/
+                backup_dir = f"{backup_root}/backup_{time.strftime('%d%m%Y_%H%M%S')}"
+                os.mkdir(backup_dir)
+            self.folder = f"{backup_root}/backup_{time.strftime('%d%m%Y_%H%M%S')}/"
             self.already = False
         else: 
             self.folder = config
@@ -31,4 +36,4 @@ class Backup():
             output = pkl.load(f)
         logging.info(f"Download {name} END")
         return output
-       
+

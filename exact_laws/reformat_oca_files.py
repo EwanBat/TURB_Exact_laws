@@ -1,4 +1,4 @@
-from exact_laws.preprocessing.process_on_oca_files import reformat_oca_files
+from .preprocessing.process_on_oca_files import reformat_oca_files
 import argparse
 import logging
 from datetime import datetime

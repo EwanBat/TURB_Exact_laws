@@ -163,16 +163,24 @@ class RunConfig:
             return tab
             
     def configure_log(self,name):
+        logs_root = "./logs"
         if name == '':
-            folder = f"log_{self.time_deb.strftime('%d%m%Y_%H%M%S')}"
+            folder_name = f"log_{self.time_deb.strftime('%d%m%Y_%H%M%S')}"
         else:
-            folder = f"log_{name}_{self.time_deb.strftime('%d%m%Y_%H%M%S')}"
-        if self.rank == 0: os.mkdir(folder)
+            folder_name = f"log_{name}_{self.time_deb.strftime('%d%m%Y_%H%M%S')}"
+        
+        if self.rank == 0:
+            os.makedirs(logs_root, exist_ok=True)
+            folder = f"{logs_root}/{folder_name}"
+            os.mkdir(folder)
+        else:
+            folder = f"{logs_root}/{folder_name}"
+        
         self.barrier()
-        filename = f"{folder}/{folder[4:]}_rank{self.rank}.log"
+        filename = f"{folder}/{folder_name[4:]}_rank{self.rank}.log"
         logging.basicConfig(filename=filename, 
                         level=logging.INFO, 
-                    format='%(asctime)s %(module)-12s %(levelname)-8s %(message)s',
+                        format='%(asctime)s %(module)-12s %(levelname)-8s %(message)s',
                     )
         
 def load(config, numbap=False):
