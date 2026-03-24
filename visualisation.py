@@ -12,10 +12,11 @@ plt.rcParams['ytick.labelsize']= 12
 plt.rcParams['legend.fontsize'] = 10
 
 simu = "CGL5"
-file_to_read = "results/OCA_CGL5_processed_bin2_PP98_BG17_red2D.h5"
+file_to_read = "results/OCA_CGL5_processed_bin2_all_laws_red2D.h5"
 quantities, grid, coeffs = readfile(file_to_read)
 print("Quantities:", quantities.keys())
 print("Coeffs:", coeffs.keys())
+print("Grid:", grid.keys())
 
 # %% Define the parameters for the exact laws
 kdi = 0.045
@@ -28,36 +29,87 @@ dissi_par = 1
 # %% Create a dictionary of list to sort the terms with the exact laws
 dic_of_list_terms = {}
 dic_of_list_terms['PP98'] = [k for k in coeffs if k.split('_',1)[0] == 'PP98']
-print(dic_of_list_terms['PP98'])
 
 dic_of_list_terms['BG17'] = [k for k in coeffs if k.split('_',1)[0] == 'BG17']
-print(dic_of_list_terms['BG17'])
+
+dic_of_list_terms['ISS22Gyr'] = [k for k in coeffs if k.split('_',1)[0] == 'ISS22Gyr']
+
+dic_of_list_terms['ISS22Iso'] = [k for k in coeffs if k.split('_',1)[0] == 'ISS22Iso']
+
+dic_of_list_terms['ISS22Cgl'] = [k for k in coeffs if k.split('_',1)[0] == 'ISS22Cgl']
 
 # %% Sort the datas in dictionaries
-lpar = grid["lpar"]; lperp = grid["lperp"]
+lpar = grid["lpar"]*grid['c'][2]; lperp = grid["lperp"]*grid['c'][0]
+lx = grid["lx"]*grid['c'][0]; ly = grid["ly"]*grid['c'][1]; lz = grid["lz"]*grid['c'][2]
+print("lpar:", lpar.shape, "lperp:", lperp.shape)
+print("lx:", lx.shape, "ly:", ly.shape, "lz:", lz.shape)
 results = {}
 for law in dic_of_list_terms.keys():
     list_term = dic_of_list_terms[law]
-    results[law] = linear_op_from_list_term(coeffs,quantities,list_term)
-print(results.keys())
+    results[law] = np.transpose(linear_op_from_list_term(coeffs,quantities,list_term))
+
 # %% Plot the results for PP98
 save = False
 num = "PP98"
 law = "PP98"
-xlab = r"l$_{\parallel}$"; ylab = r"l$_{\perp}$"; zlab = "PP98"
+xlab = r"l$_{\perp}$"; ylab = r"l$_{\parallel}$"; zlab = "PP98"
 title = f"Total {law} OCA {simu}"
 xdissi = dissi_perp; ydissi = dissi_par; xforc = forc_perp; yforc = forc_par
-display_map(num, lpar, lperp, results[law], xlab, ylab, zlab, title, xdissi, ydissi, xforc, yforc)
+vmin = -np.max(np.abs(results[law])); vmax = -vmin
+display_map(num, lperp, lpar, results[law], xlab, ylab, zlab, title, 
+            xdissi, ydissi, xforc, yforc, vmin = vmin, vmax = vmax)
 plt.tight_layout()
 if save:
     plt.savefig(f"images/visualisation_{num}_{simu}.png", dpi=300)
+
 # %% Plot the results for BG17
 num = "BG17"
 law = "BG17"
-xlab = r"l$_{\parallel}$"; ylab = r"l$_{\perp}$"; zlab = "BG17"
+xlab = r"l$_{\perp}$"; ylab = r"l$_{\parallel}$"; zlab = "BG17"
 title = f"Total {law} OCA {simu}"
 xdissi = dissi_perp; ydissi = dissi_par; xforc = forc_perp; yforc = forc_par
-display_map(num, lpar, lperp, results[law], xlab, ylab, zlab, title, xdissi, ydissi, xforc, yforc)
+vmin = -np.max(np.abs(results[law])); vmax = -vmin
+display_map(num, lperp, lpar, results[law], xlab, ylab, zlab, title, 
+            xdissi, ydissi, xforc, yforc, vmin = vmin, vmax = vmax)
+plt.tight_layout()
+if save:
+    plt.savefig(f"images/visualisation_{num}_{simu}.png", dpi=300)
+
+# %% Plot the results for ISS22Gyr
+num = "ISS22Gyr"
+law = "ISS22Gyr"
+xlab = r"l$_{\perp}$"; ylab = r"l$_{\parallel}$"; zlab = "ISS22Gyr"
+title = f"Total {law} OCA {simu}"
+xdissi = dissi_perp; ydissi = dissi_par; xforc = forc_perp; yforc = forc_par
+vmin = -np.max(np.abs(results[law])); vmax = -vmin
+display_map(num, lperp, lpar, results[law], xlab, ylab, zlab, title, 
+            xdissi, ydissi, xforc, yforc, vmin = vmin, vmax = vmax)
+plt.tight_layout()
+if save:
+    plt.savefig(f"images/visualisation_{num}_{simu}.png", dpi=300)
+
+# %% Plot the results for ISS22Iso
+num = "ISS22Iso"
+law = "ISS22Iso"
+xlab = r"l$_{\perp}$"; ylab = r"l$_{\parallel}$"; zlab = "ISS22Iso"
+title = f"Total {law} OCA {simu}"
+xdissi = dissi_perp; ydissi = dissi_par; xforc = forc_perp; yforc = forc_par
+vmin = -np.max(np.abs(results[law])); vmax = -vmin
+display_map(num, lperp, lpar, results[law], xlab, ylab, zlab, title, 
+            xdissi, ydissi, xforc, yforc, vmin = vmin, vmax = vmax)
+plt.tight_layout()
+if save:
+    plt.savefig(f"images/visualisation_{num}_{simu}.png", dpi=300)
+
+# %% Plot the results for ISS22Cgl
+num = "ISS22Cgl"
+law = "ISS22Cgl"
+xlab = r"l$_{\perp}$"; ylab = r"l$_{\parallel}$"; zlab = "ISS22Cgl"
+title = f"Total {law} OCA {simu}"
+xdissi = dissi_perp; ydissi = dissi_par; xforc = forc_perp; yforc = forc_par
+vmin = -np.max(np.abs(results[law])); vmax = -vmin
+display_map(num, lperp, lpar, results[law], xlab, ylab, zlab, title, 
+            xdissi, ydissi, xforc, yforc, vmin = vmin, vmax = vmax)
 plt.tight_layout()
 if save:
     plt.savefig(f"images/visualisation_{num}_{simu}.png", dpi=300)

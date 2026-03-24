@@ -4,6 +4,8 @@ import configparser
 from .running_tools.run_config_wrap import load
 from .running_tools.backup_wrap import Backup
 from .el_calc_mod.__init__ import calc_exact_laws_from_config
+import time
+time_start = time.time()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--config-file", help="config file", default='example_input_calc.txt')
@@ -50,4 +52,8 @@ if __name__ == "__main__":
     logging.info(message)
     
     calc_exact_laws_from_config(config_file=args.config_file,run_config=run_config, backup=backup)
+    
+    time_end = time.time()
+    logging.info(f"Total execution time: {time_end - time_start} seconds")
+
     logging.info(f"Exit")

@@ -2,8 +2,10 @@ from .preprocessing.process_on_oca_files import reformat_oca_files
 import argparse
 import logging
 from datetime import datetime
+import time
 
 version = "09/07/2022"
+time_start = time.time()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--config-file", help="config file", default='example_input_process.ini')
@@ -36,4 +38,7 @@ if __name__ == "__main__":
         
     logging.info(f"Run of {__file__} version {version}\n")
     reformat_oca_files(config_file=args.config_file)
+    time_end = time.time()
+    logging.info(f"Total execution time: {time_end - time_start} seconds")
     logging.info(f"Exit")
+
