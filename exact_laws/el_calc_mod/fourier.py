@@ -93,10 +93,10 @@ def apply_method(original_dataset, incremental_grid, coord, laws, terms, output_
         
         output_dataset.params['state']['nb_term_rec'] = output_dataset.params['state']['nb_term_done']
         
-        logging.info("INIT creat temporary .h5 file")
+        logging.info("INIT create temporary .h5 file")
         if run_config.rank == 0:
             shutil.copy2(output_filename,output_filename+'temp')
-        logging.info("END creat temporary .h5 file")
+        logging.info("END create temporary .h5 file")
         
         # ## CALCUL LOI EXACTE
         while output_dataset.params['state']['nb_term_rec'] != output_dataset.params['state']['nb_terms'] :
