@@ -8,3 +8,7 @@ exact_laws/exact_laws_calc/laws/__pycache__/
 *.h5
 
 notebooks/
+
+visualisation.py
+
+visualisation_tools.py
