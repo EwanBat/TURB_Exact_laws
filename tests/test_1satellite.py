@@ -11,6 +11,7 @@ from trajectory_quantities import (
     display_results,
     list_required_quantities
 )
+from trajectory_laws import extract_trajectory_and_compute_law_terms, display_law_terms_results
 
 # %% Configuration
 input_folder = "data_oca"
@@ -86,38 +87,15 @@ required_qty = list_required_quantities(laws, terms, quantities)
 print(f"Required quantities: {required_qty}\n")
 
 # %% Compute quantities along trajectory
-print("=== Computing trajectory quantities ===")
-traj_quantities = extract_trajectory_and_compute(
+# Récupérer les deux dictionnaires
+dic_terms, dic_law_terms = extract_trajectory_and_compute_law_terms(
     dic_quant,
     y_pos=100,
     z_pos=100,
     dic_param=dic_param,
     laws=laws,
-    terms=terms,
-    quantities=quantities,
     verbose=True
 )
-display_results(traj_quantities, "Trajectory Results")
 
-# %% Calculate flux term using Fourier method
-print("=== Calculating flux term using Fourier method ===")
-from exact_laws.el_calc_mod.laws.PP98 import Pp98
-from exact_laws.el_calc_mod.terms.flux_dvdvdv import FluxDvdvdv
-from exact_laws.el_calc_mod.terms.flux_dbdbdv import FluxDbdbdv
-from exact_laws.el_calc_mod.terms.flux_dvdbdb import FluxDvdbdb
-import numpy.fft as ft
-
-# Initialize law and terms
-law = Pp98()
-term_dvdvdv = FluxDvdvdv()
-term_dbdbdv = FluxDbdbdv()
-term_dvdbdb = FluxDvdbdb()
-
-# Compute flux using Fourier method
-flux_dvdvdv = term_dvdvdv.calc_fourier(dic_quant["vx"], dic_quant["vy"], dic_quant["vz"])
-flux_dbdbdv = term_dbdbdv.calc_fourier(dic_quant["bx"], dic_quant["by"], dic_quant["bz"], 
-                                       dic_quant["vx"], dic_quant["vy"], dic_quant["vz"])
-flux_dvdbdb = term_dvdbdb.calc_fourier(dic_quant["vx"], dic_quant["vy"], dic_quant["vz"], 
-                                       dic_quant["bx"], dic_quant["by"], dic_quant["bz"])
-
-print("✓ Flux terms calculated using Fourier method")
+# Afficher les résultats
+display_law_terms_results(dic_law_terms, "Trajectory Laws")
