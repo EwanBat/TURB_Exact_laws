@@ -6,12 +6,15 @@ Utilise les méthodes calc_fourier() des termes pour les trajectoires.
 """
 
 import numpy as np
+import logging
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
 from trajectory_quantities import (
     list_required_quantities,
     compute_all_available_quantities
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Mapping des variables abstraites vers leurs composantes concrètes
@@ -151,7 +154,7 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, verbose=False):
     """
     
     if verbose:
-        print(f"  Computing term {term_name}...", end=" ")
+        logger.info(f"Computing term {term_name}...")
     
     if term_name not in TERMS:
         raise ValueError(f"Term '{term_name}' not found in TERMS")
@@ -176,11 +179,11 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, verbose=False):
         
     except Exception as e:
         if verbose:
-            print(f"✗ {e}")
+            logger.error(f"Failed to compute {term_name}: {e}")
         raise
     
     if verbose:
-        print("✓")
+        logger.info(f"Term {term_name} computed")
     
     return result
 
@@ -212,13 +215,13 @@ def compute_all_terms_for_laws(dic_quant, dic_param, laws=None, verbose=False):
     required_terms = list_required_terms(laws)
     
     if verbose:
-        print(f"\n=== Computing {len(required_terms)} terms ===")
-        print(f"Required terms: {required_terms}\n")
+        logger.info(f"Computing {len(required_terms)} terms")
+        logger.info(f"Required terms: {required_terms}")
     
     # Get required quantities for these terms and compute them
     required_quantities = list_required_quantities(laws=laws)
     if verbose:
-        print(f"Required quantities for terms: {required_quantities}")
+        logger.info(f"Required quantities for terms: {required_quantities}")
     
     # Compute all available quantities (this will calculate v, b, Ib, etc. from raw data)
     dic_quant_complete = compute_all_available_quantities(
@@ -233,7 +236,7 @@ def compute_all_terms_for_laws(dic_quant, dic_param, laws=None, verbose=False):
             result[term_name] = computed
         except Exception as e:
             if verbose:
-                print(f"  ✗ {term_name}: {str(e)}")
+                logger.error(f"Failed to compute {term_name}: {str(e)}")
     
     return result
 
@@ -288,10 +291,10 @@ def extract_trajectory_and_compute_terms(dic_quant, y_pos, z_pos, dic_param=None
                 dic_param["rho_mean"] = np.mean(dic_quant[key])
     
     if verbose:
-        print(f"\n=== Trajectory at (y={y_pos}, z={z_pos}) ===")
+        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
         array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
         if array_keys:
-            print(f"Data shape: {trajectory_data[array_keys[0]].shape}")
+            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
     
     # Compute all terms for laws
     dic_terms = compute_all_terms_for_laws(trajectory_data, dic_param, laws, verbose)
@@ -310,15 +313,16 @@ def display_results(dic_terms, title="Results along trajectory"):
     title : str
         Titre de l'affichage
     """
-    print(f"\n=== {title} ===")
+    logger.info(f"\n{title}")
+    logger.info("-" * 70)
     
     for key in sorted(dic_terms.keys()):
         value = dic_terms[key]
         if isinstance(value, np.ndarray) and value.ndim == 1:
-            print(f"{key:30s}: min={value.min():12.6e}, max={value.max():12.6e}, mean={value.mean():12.6e}")
+            logger.info(f"  {key:30s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
         elif isinstance(value, np.ndarray):
-            print(f"{key:30s}: shape={value.shape}, mean={value.mean():12.6e}")
+            logger.info(f"  {key:30s}: shape={value.shape} | mean={value.mean():12.6e}")
         elif isinstance(value, (int, float, np.number)):
-            print(f"{key:30s}: {value:15.6e}")
+            logger.info(f"  {key:30s}: {value:15.6e}")
         else:
-            print(f"{key:30s}: {value}")
+            logger.info(f"  {key:30s}: {value}")

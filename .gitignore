@@ -7,8 +7,12 @@ exact_laws/exact_laws_calc/laws/__pycache__/
 
 *.h5
 
+*.log
+
 notebooks/
 
 visualisation.py
 
 visualisation_tools.py
+
+visualisation_traj.py

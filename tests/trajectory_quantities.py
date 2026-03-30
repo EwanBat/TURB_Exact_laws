@@ -8,10 +8,13 @@ Les quantités (v ou Iv, etc.) sont déterminées par les variables requises des
 import numpy as np
 import numexpr as ne
 import configparser
+import logging
 from pathlib import Path
 from exact_laws.preprocessing.quantities import QUANTITIES
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
+
+logger = logging.getLogger(__name__)
 
 # ========== MAPPING DES QUANTITÉS ET LEURS DÉPENDANCES ==========
 # Toutes les quantités (compressible et incompressible) dans un même dictionnaire
@@ -175,7 +178,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, verbos
     """
     
     if verbose:
-        print(f"  Computing {quantity_name}...", end=" ")
+        logger.info(f"Computing {quantity_name}...")
     
     if quantity_name not in QUANTITIES:
         raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
@@ -195,7 +198,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, verbos
         quantity_obj.create_datasets(mock_file, dic_quant, dic_param)
     except Exception as e:
         if verbose:
-            print(f"✗ {e}")
+            logger.error(f"Failed to compute {quantity_name}: {e}")
         raise
     
     if len(mock_file.data) == 1:
@@ -204,7 +207,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, verbos
         result = mock_file.data
     
     if verbose:
-        print("✓")
+        logger.info(f"Quantity {quantity_name} computed")
     
     return result
 
@@ -237,9 +240,9 @@ def compute_all_available_quantities(dic_quant, dic_param, required_quantities=N
     available_quantities = get_available_quantities_for_requirements(dic_quant, required_quantities)
     
     if verbose:
-        print(f"\n=== Computing {len(available_quantities)} quantities ===")
-        print(f"Required: {required_quantities}")
-        print(f"Available to compute: {available_quantities}\n")
+        logger.info(f"Computing {len(available_quantities)} quantities")
+        logger.info(f"Required: {required_quantities}")
+        logger.info(f"Available to compute: {available_quantities}")
     
     result = dic_quant.copy()
     
@@ -259,7 +262,7 @@ def compute_all_available_quantities(dic_quant, dic_param, required_quantities=N
                 result[quantity_name] = computed
         except Exception as e:
             if verbose:
-                print(f"  ✗ {quantity_name}: {str(e)}")
+                logger.error(f"Failed to compute {quantity_name}: {str(e)}")
     
     return result
 
@@ -314,16 +317,16 @@ def extract_trajectory_and_compute(dic_quant, y_pos, z_pos, dic_param=None,
                 trajectory_data["meanpperp"] = np.mean(dic_quant[key])
     
     if verbose:
-        print(f"\n=== Trajectory at (y={y_pos}, z={z_pos}) ===")
+        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
         array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
         if array_keys:
-            print(f"Data shape: {trajectory_data[array_keys[0]].shape}")
+            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
     
     # Determine required quantities
     required_qty = list_required_quantities(laws, terms, quantities)
     
     if verbose:
-        print(f"\nRequired quantities from laws/terms: {required_qty}")
+        logger.info(f"Required quantities from laws/terms: {required_qty}")
     
     # Compute all available quantities
     return compute_all_available_quantities(
@@ -335,10 +338,11 @@ def display_results(traj_quantities, title="Results along trajectory"):
     """
     Affiche les résultats d'une trajectoire.
     """
-    print(f"\n=== {title} ===")
+    logger.info(f"\n{title}")
+    logger.info("-" * 70)
     for key in sorted(traj_quantities.keys()):
         value = traj_quantities[key]
         if isinstance(value, np.ndarray) and value.ndim == 1:
-            print(f"{key:20s}: min={value.min():12.6e}, max={value.max():12.6e}, mean={value.mean():12.6e}")
+            logger.info(f"  {key:20s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
         elif isinstance(value, (int, float, np.number)):
-            print(f"{key:20s}: {value:15.6e}")
+            logger.info(f"  {key:20s}: {value:15.6e}")

@@ -6,9 +6,12 @@ Pour les divergences, utilise un facteur commun par loi au lieu de calculer rée
 """
 
 import numpy as np
+import logging
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
 from trajectory_terms import compute_all_terms_for_laws
+
+logger = logging.getLogger(__name__)
 
 
 # Facteurs de remplacement pour les divergences
@@ -115,10 +118,10 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
             if base_term in dic_terms:
                 term_value = dic_terms[base_term]
                 # Appliquer le facteur de divergence (pas le coefficient)
-                result[coeff_key] = div_factor * term_value
+                result[coeff_key] = div_factor * np.sum(term_value, axis=0)
                 applied_terms.append(coeff_key)
                 if verbose and is_flux_term:
-                    print(f"      → {coeff_key} (flux): div_factor={div_factor:.4f} appliqué")
+                    logger.info(f"{coeff_key} (flux): div_factor={div_factor:.4f} applied")
             else:
                 incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
         
@@ -137,7 +140,7 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
                     result[coeff_key] = div_factor
                 applied_terms.append(coeff_key)
                 if verbose:
-                    print(f"      → {coeff_key} (source+grad): div_factor={div_factor:.4f} appliqué")
+                    logger.info(f"{coeff_key} (source+grad): div_factor={div_factor:.4f} applied")
             else:
                 # Source normal sans gradient
                 if coeff_key in dic_terms:
@@ -146,7 +149,7 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
                     result[coeff_key] = div_factor * term_value
                     applied_terms.append(coeff_key)
                     if verbose:
-                        print(f"      → {coeff_key} (source): div_factor={div_factor:.4f} appliqué")
+                        logger.info(f"{coeff_key} (source): div_factor={div_factor:.4f} applied")
                 else:
                     incomputable_terms.append((coeff_key, "term not computed"))
         
@@ -162,21 +165,25 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
     
     if verbose:
         if applied_terms:
-            print(f"\n    Applied terms ({len(applied_terms)}):")
+            logger.info(f"Applied terms ({len(applied_terms)}):")
             for term in applied_terms:
-                print(f"      ✓ {term}")
+                logger.info(f"  {term}")
         if incomputable_terms:
-            print(f"    Incomputable terms ({len(incomputable_terms)}):")
+            logger.info(f"Incomputable terms ({len(incomputable_terms)}):")
             for term, reason in incomputable_terms:
-                print(f"      ⚠ {term}: {reason}")
+                logger.info(f"  {term}: {reason}")
     
-    return result
+    return result, coeffs  # ← Retourner aussi les coefficients originaux
 
 
 def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbose=False):
     """
     Calcule les termes des lois avec coefficients appliqués.
-    Retourne un dictionnaire des termes de lois (div_flux_*, source_*, etc.).
+    Retourne un dictionnaire plat des termes de lois (div_flux_*, source_*, etc.).
+    
+    Note: Puisque les termes sont identiques pour toutes les lois (le facteur de divergence
+    est appliqué à tous les termes indépendamment de la loi), les termes ne sont calculés
+    qu'une seule fois pour la première loi valide.
     
     Paramètres:
     -----------
@@ -190,7 +197,7 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
     
     Retour:
     -------
-    dict : Dictionnaire des termes de lois avec coefficients {law_name: {term_key: value}}
+    dict : Dictionnaire plat des termes de lois avec coefficients {{term_key: value}}
     """
     
     if laws is None:
@@ -201,38 +208,43 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
         dic_param["rho_mean"] = 1.0
     
     result = {}
+    dic_coefficients = {}
     
-    if verbose:
-        print(f"\n=== Computing law terms for {len(laws)} laws ===")
-        print(f"Divergence factor: {list(set(DIVERGENCE_REPLACEMENT_FACTORS.values()))[0]}\n")
-    
+    # Calculer les termes une seule fois (ils sont identiques pour toutes les lois)
+    computed = False
     for law_name in laws:
         if law_name not in LAWS:
             if verbose:
-                print(f"  ✗ Law '{law_name}' not found")
+                logger.warning(f"Law '{law_name}' not found")
             continue
         
         if verbose:
-            print(f"  {law_name}:")
+            logger.info(f"Processing law: {law_name}")
         
         try:
             law_obj = LAWS[law_name]
             
             # Appliquer les coefficients et facteurs de divergence
-            law_terms_dict = apply_law_coefficients_and_factors(
+            law_terms_dict, law_coeffs = apply_law_coefficients_and_factors(
                 dic_terms, law_obj, law_name, dic_param, verbose=verbose
             )
             
-            result[law_name] = law_terms_dict
+            # Pour la première loi, stocker les termes (ils seront identiques pour les autres)
+            if not computed:
+                result = law_terms_dict
+                computed = True
+            
+            # Ajouter les coefficients avec clés formatées
+            for term_key, coeff_value in law_coeffs.items():
+                dic_coefficients[f"{law_name}_{term_key}"] = coeff_value
             
             if verbose:
-                print(f"    ✓ {len(law_terms_dict)} terms added")
+                logger.info(f"Added {len(law_terms_dict)} terms for {law_name}")
         
         except Exception as e:
-            if verbose:
-                print(f"  ✗ {law_name}: {e}")
+            logger.error(f"Failed to process {law_name}: {e}")
     
-    return result
+    return result, dic_coefficients
 
 
 def extract_trajectory_and_compute_law_terms(dic_quant, y_pos, z_pos, dic_param=None, 
@@ -251,14 +263,15 @@ def extract_trajectory_and_compute_law_terms(dic_quant, y_pos, z_pos, dic_param=
     dic_param : dict
         Paramètres (optionnels)
     laws : list[str]
-        Lois à calculer
+        Lois à calculer (terme utilisé pour récupérer les coefficients)
     verbose : bool
     
     Retour:
     -------
-    tuple : (dic_terms, dic_law_terms)
+    tuple : (dic_terms, dic_law_terms, dic_coefficients)
         - dic_terms: dictionnaire des termes de base
-        - dic_law_terms: dictionnaire des termes de lois avec coefficients
+        - dic_law_terms: dictionnaire plat des termes de lois avec coefficients {terme: array}
+        - dic_coefficients: dictionnaire des coefficients de loi {loi_terme: coeff}
     """
     
     if dic_param is None:
@@ -287,18 +300,18 @@ def extract_trajectory_and_compute_law_terms(dic_quant, y_pos, z_pos, dic_param=
                 dic_param["rho_mean"] = np.mean(dic_quant[key])
     
     if verbose:
-        print(f"\n=== Trajectory at (y={y_pos}, z={z_pos}) ===")
+        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
         array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
         if array_keys:
-            print(f"Data shape: {trajectory_data[array_keys[0]].shape}")
+            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
     
     # Compute all terms for laws
     dic_terms = compute_all_terms_for_laws(trajectory_data, dic_param, laws, verbose)
     
     # Compute law terms with coefficients
-    dic_law_terms = compute_laws_terms_with_coefficients(dic_terms, dic_param, laws, verbose)
+    dic_law_terms, dic_coefficients = compute_laws_terms_with_coefficients(dic_terms, dic_param, laws, verbose)
     
-    return dic_terms, dic_law_terms
+    return dic_terms, dic_law_terms, dic_coefficients  # ← 3e retour
 
 
 def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
@@ -308,26 +321,23 @@ def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
     Paramètres:
     -----------
     dic_law_terms : dict
-        Dictionnaire des termes de lois par loi
+        Dictionnaire plat des termes de lois {terme: array}
     title : str
         Titre de l'affichage
     """
-    print(f"\n=== {title} ===")
+    logger.info(f"\n{title}")
+    logger.info("-" * 70)
     
-    for law_name in sorted(dic_law_terms.keys()):
-        print(f"\n{law_name}:")
-        law_terms = dic_law_terms[law_name]
-        
-        for term_key in sorted(law_terms.keys()):
-            value = law_terms[term_key]
-            if isinstance(value, np.ndarray) and value.ndim == 1:
-                if value.size > 0:
-                    print(f"  {term_key:40s}: min={value.min():12.6e}, max={value.max():12.6e}, mean={value.mean():12.6e}")
-                else:
-                    print(f"  {term_key:40s}: empty array")
-            elif isinstance(value, np.ndarray):
-                print(f"  {term_key:40s}: shape={value.shape}, mean={value.mean():12.6e}")
-            elif isinstance(value, (int, float, np.number)):
-                print(f"  {term_key:40s}: {value:15.6e}")
+    for term_key in sorted(dic_law_terms.keys()):
+        value = dic_law_terms[term_key]
+        if isinstance(value, np.ndarray) and value.ndim == 1:
+            if value.size > 0:
+                logger.info(f"  {term_key:40s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
             else:
-                print(f"  {term_key:40s}: {value}")
+                logger.info(f"  {term_key:40s}: empty array")
+        elif isinstance(value, np.ndarray):
+            logger.info(f"  {term_key:40s}: shape={value.shape} | mean={value.mean():12.6e}")
+        elif isinstance(value, (int, float, np.number)):
+            logger.info(f"  {term_key:40s}: {value:15.6e}")
+        else:
+            logger.info(f"  {term_key:40s}: {value}")
