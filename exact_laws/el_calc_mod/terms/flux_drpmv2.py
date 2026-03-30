@@ -41,8 +41,8 @@ class FluxDrpmv2(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, rho, pm, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, rho, pm)
 
-    def calc_fourier(self, vx, vy, vz, rho, pm, **kwarg) -> List:
-        return calc_with_fourier( vx, vy, vz, rho, pm)
+    def calc_fourier(self, vx, vy, vz, rho, pm, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, rho, pm, traj=traj)
 
     def variables(self) -> List[str]:
         return ['v', 'rho', 'pm']
@@ -76,16 +76,16 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     return outx, outy, outz
 
 
-def calc_with_fourier( vx, vy, vz, rho, pm):
-    fr = ft.fft(rho) 
+def calc_with_fourier( vx, vy, vz, rho, pm, traj=False):
+    fr = ft.fft(rho, traj=traj) 
         
-    fpvx = ft.fft(pm*vx) 
-    flux_x = ft.ifft(np.conj(fr)*fpvx - fr*np.conj(fpvx))
+    fpvx = ft.fft(pm*vx, traj=traj) 
+    flux_x = ft.ifft(np.conj(fr)*fpvx - fr*np.conj(fpvx), traj=traj)
      
-    fpvy = ft.fft(pm*vy)
-    flux_y = ft.ifft(np.conj(fr)*fpvy - fr*np.conj(fpvy))
+    fpvy = ft.fft(pm*vy, traj=traj)
+    flux_y = ft.ifft(np.conj(fr)*fpvy - fr*np.conj(fpvy), traj=traj)
     
-    fpvz = ft.fft(pm*vz)
-    flux_z = ft.ifft(np.conj(fr)*fpvz - fr*np.conj(fpvz))
+    fpvz = ft.fft(pm*vz, traj=traj)
+    flux_z = ft.ifft(np.conj(fr)*fpvz - fr*np.conj(fpvz), traj=traj)
     
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 

@@ -39,10 +39,9 @@ class Bg17Vwv(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, wx, wy, wz, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, wx, wy, wz)
 
-    def calc_fourier(self, vx, vy, vz, wx, wy, wz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, wx, wy, wz)
-        
-    
+    def calc_fourier(self, vx, vy, vz, wx, wy, wz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, wx, wy, wz, traj=traj)
+
     def variables(self) -> List[str]:
         return ['w','v']
     
@@ -73,20 +72,23 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         wxP, wyP, wzP, wxNP, wyNP, wzNP
     )
    
-def calc_with_fourier(vx, vy, vz, wx, wy, wz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
+def calc_with_fourier(vx, vy, vz, wx, wy, wz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
     
     vXwx = vy * wz - vz * wy
     vXwy = vz * wx - vx * wz
     vXwz = vx * wy - vy * wx
     
-    fvXwx = ft.fft(vXwx)
-    fvXwy = ft.fft(vXwy)
-    fvXwz = ft.fft(vXwz)
+    fvXwx = transform(vXwx)
+    fvXwy = transform(vXwy)
+    fvXwz = transform(vXwz)
     output = 2*np.sum(vXwx*vx+vXwy*vy+vXwz*vz)
-    output -= ft.ifft(fvXwx*np.conj(fvx) + np.conj(fvXwx)*fvx + fvXwy*np.conj(fvy) + np.conj(fvXwy)*fvy + fvXwz*np.conj(fvz) + np.conj(fvXwz)*fvz)
-    
-    
+    output -= inv_transform(fvXwx*np.conj(fvx) + np.conj(fvXwx)*fvx + fvXwy*np.conj(fvy) + np.conj(fvXwy)*fvy + fvXwz*np.conj(fvz) + np.conj(fvXwz)*fvz)
+
+
     return output/np.size(output)

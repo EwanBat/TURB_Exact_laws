@@ -38,8 +38,8 @@ class SourceRbdvdb(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, bx, by, bz, divb, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, bx, by, bz, divb)
     
-    def calc_fourier(self, rho, vx, vy, vz, bx, by, bz, divb, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, bx, by, bz, divb)
+    def calc_fourier(self, rho, vx, vy, vz, bx, by, bz, divb, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, bx, by, bz, divb, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "v", "b", "divb"]
@@ -68,18 +68,21 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, bx, by, bz, d
     return (f(rhoNP, vxP, vyP, vzP, vxNP, vyNP, vzNP, bxNP, byNP, bzNP, divbP) 
             + f(rhoP, vxNP, vyNP, vzNP, vxP, vyP, vzP, bxP, byP, bzP, divbNP))
 
-def calc_with_fourier(rho, vx, vy, vz, bx, by, bz, divb):
+def calc_with_fourier(rho, vx, vy, vz, bx, by, bz, divb, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*dB*C'-A'*dB*C = A*(B'-B)*C'-A'*(B'-B)*C = A*B'*C' + A'B*C - A'*B'*C - A*B*C'
-    frbx = ft.fft(rho*bx)
-    frby = ft.fft(rho*by)
-    frbz = ft.fft(rho*bz)
-    fvdx = ft.fft(vx*divb)
-    fvdy = ft.fft(vy*divb)
-    fvdz = ft.fft(vz*divb)
-    fd = ft.fft(divb)
-    frbv = ft.fft(rho*bx*vx+rho*by*vy+rho*bz*vz)
+    frbx = transform(rho*bx)
+    frby = transform(rho*by)
+    frbz = transform(rho*bz)
+    fvdx = transform(vx*divb)
+    fvdy = transform(vy*divb)
+    fvdz = transform(vz*divb)
+    fd = transform(divb)
+    frbv = transform(rho*bx*vx+rho*by*vy+rho*bz*vz)
     
-    output = ft.ifft(fvdx*np.conj(frbx)+fvdy*np.conj(frby)+fvdz*np.conj(frbz)
+    output = inv_transform(fvdx*np.conj(frbx)+fvdy*np.conj(frby)+fvdz*np.conj(frbz)
                      +np.conj(fvdx)*frbx+np.conj(fvdy)*frby+np.conj(fvdz)*frbz
                      -frbv*np.conj(fd)-np.conj(frbv)*fd)
     return output/np.size(output)

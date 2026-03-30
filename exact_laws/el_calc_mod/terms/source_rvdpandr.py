@@ -62,8 +62,8 @@ class SourceRvdpandr(AbstractTerm):
             calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho
         )
 
-    def calc_fourier(self, rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho)
+    def calc_fourier(self, rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "gradrho", "v", "pgyr", "pm", "b"]
@@ -96,23 +96,26 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, pperp, ppar, 
     return (f(rhoP, rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, vxNP, vyNP, vzNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxrhoP, dyrhoP, dzrhoP) 
             + f(rhoNP, rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, vxP, vyP, vzP, bxNP, byNP, bzNP, bxP, byP, bzP, dxrhoNP, dyrhoNP, dzrhoNP))
 
-def calc_with_fourier(rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho):
+def calc_with_fourier(rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*B*dC*D'/E' - A'*B'*dC*D/E = A*B*C'*D'/E' + A'*B'*C*D/E - A*B*C*D'/E' - A'*B'*C'*D/E
-    fpdrx = ft.fft((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * bx /rho)
-    fpdry = ft.fft((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * by /rho)
-    fpdrz = ft.fft((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * bz /rho)
-    frvx = ft.fft(rho*vx)
-    frvy = ft.fft(rho*vy)
-    frvz = ft.fft(rho*vz)
-    output = ft.ifft(fpdrx*np.conj(frvx) + fpdry*np.conj(frvy) + fpdrz*np.conj(frvz)
+    fpdrx = transform((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * bx /rho)
+    fpdry = transform((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * by /rho)
+    fpdrz = transform((ppar-pperp)/(2*pm) * (dxrho*bx+dyrho*by+dzrho*bz) * bz /rho)
+    frvx = transform(rho*vx)
+    frvy = transform(rho*vy)
+    frvz = transform(rho*vz)
+    output = inv_transform(fpdrx*np.conj(frvx) + fpdry*np.conj(frvy) + fpdrz*np.conj(frvz)
                      + np.conj(fpdrx)*frvx + np.conj(fpdry)*frvy + np.conj(fpdrz)*frvz)
     del(fpdrx,fpdry,fpdrz,frvx,frvy,frvz)
-    frpvx = ft.fft(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * bx)
-    frpvy = ft.fft(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * by)
-    frpvz = ft.fft(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * bz)
-    fdrx = ft.fft(dxrho / rho)
-    fdry = ft.fft(dyrho / rho)
-    fdrz = ft.fft(dzrho / rho)
-    output -= ft.ifft(frpvx*np.conj(fdrx) + frpvy*np.conj(fdry) + frpvz*np.conj(fdrz)
+    frpvx = transform(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * bx)
+    frpvy = transform(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * by)
+    frpvz = transform(rho * (ppar-pperp)/(2*pm) * (vx*bx+vy*by+vz*bz) * bz)
+    fdrx = transform(dxrho / rho)
+    fdry = transform(dyrho / rho)
+    fdrz = transform(dzrho / rho)
+    output -= inv_transform(frpvx*np.conj(fdrx) + frpvy*np.conj(fdry) + frpvz*np.conj(fdrz)
                      + np.conj(frpvx)*fdrx + np.conj(frpvy)*fdry + np.conj(frpvz)*fdrz)
     return output/np.size(output)

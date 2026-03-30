@@ -27,8 +27,8 @@ class DissVinc(AbstractTerm):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, )
     
-    def calc_fourier(self, vx, vy, vz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, )
+    def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["v",]
@@ -56,11 +56,14 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     return f(vxP, vyP, vzP, vxNP, vyNP, vzNP)
 
-def calc_with_fourier(vx, vy, vz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
+def calc_with_fourier(vx, vy, vz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
     
-    output = ft.ifft(fvx*np.conj(fvx) + fvy*np.conj(fvy) + fvz*np.conj(fvz))
+    output = inv_transform(fvx*np.conj(fvx) + fvy*np.conj(fvy) + fvz*np.conj(fvz))
     return output/np.size(output)
     

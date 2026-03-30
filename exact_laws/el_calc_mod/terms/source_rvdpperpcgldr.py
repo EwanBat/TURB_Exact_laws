@@ -13,8 +13,8 @@ class SourceRvdpperpcgldr(SourceRvdpisodr):
     ) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pperpcgl, dxrho, dyrho, dzrho)
 
-    def calc_fourier(self, rho, vx, vy, vz, ppperpcgl, dxrho, dyrho, dzrho, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, ppperpcgl, dxrho, dyrho, dzrho)
+    def calc_fourier(self, rho, vx, vy, vz, ppperpcgl, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, ppperpcgl, dxrho, dyrho, dzrho, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "gradrho", "v", "pcgl"]

@@ -52,8 +52,8 @@ class FluxDvdbdb(AbstractTerm):
         #return calc_flux_with_numba(calc_in_point, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
     
-    def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz)
+    def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=traj)
 
     def variables(self) -> List[str]:
         return ['Ib','v']
@@ -116,46 +116,49 @@ def calc_in_point(i, j, k, ip, jp, kp, vx, vy, vz, Ibx, Iby, Ibz):
     
     return fx, fy, fz
 
-def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz):
-        fvx = ft.fft(vx)
-        fvy = ft.fft(vy)
-        fvz = ft.fft(vz)
-        fbx = ft.fft(Ibx)
-        fby = ft.fft(Iby)
-        fbz = ft.fft(Ibz)
-        fbxbz = ft.fft(Ibx*Ibz)
-        fvxbx = ft.fft(vx*Ibx)
-        fvyby = ft.fft(vy*Iby)
-        fvzbz = ft.fft(vz*Ibz)
-        
-        fbxby = ft.fft(Ibx*Iby)
-        fbxvy = ft.fft(Ibx*vy)
-        fbxvz = ft.fft(Ibx*vz)
-        fbxbx = ft.fft(Ibx*Ibx)
-        flux_x = ft.ifft(fbx*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fbx)*(fvxbx+fvyby+fvzbz) 
+def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
+    fbx = transform(Ibx)
+    fby = transform(Iby)
+    fbz = transform(Ibz)
+    fbxbz = transform(Ibx*Ibz)
+    fvxbx = transform(vx*Ibx)
+    fvyby = transform(vy*Iby)
+    fvzbz = transform(vz*Ibz)
+
+    fbxby = transform(Ibx*Iby)
+    fbxvy = transform(Ibx*vy)
+    fbxvz = transform(Ibx*vz)
+    fbxbx = transform(Ibx*Ibx)
+    flux_x = inv_transform(fbx*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fbx)*(fvxbx+fvyby+fvzbz) 
                          + (fbx*np.conj(fvxbx)+fby*np.conj(fbxvy)+fbz*np.conj(fbxvz))
                          - (np.conj(fbx)*fvxbx+np.conj(fby)*fbxvy+np.conj(fbz)*fbxvz)
                          + (fvx*np.conj(fbxbx)+fvy*np.conj(fbxby)+fvz*np.conj(fbxbz))
                          - (np.conj(fvx)*fbxbx+np.conj(fvy)*fbxby+np.conj(fvz)*fbxbz))
-        del(fbxvy,fbxvz,fbxbx)
+    del(fbxvy,fbxvz,fbxbx)
         
-        fbybz = ft.fft(Iby*Ibz)
-        fbyby = ft.fft(Iby*Iby)
-        fvxby = ft.fft(vx*Iby)
-        fbyvz = ft.fft(Iby*vz)
-        flux_y = ft.ifft(fby*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fby)*(fvxbx+fvyby+fvzbz) 
+    fbybz = transform(Iby*Ibz)
+    fbyby = transform(Iby*Iby)
+    fvxby = transform(vx*Iby)
+    fbyvz = transform(Iby*vz)
+    flux_y = inv_transform(fby*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fby)*(fvxbx+fvyby+fvzbz) 
                          + (fbx*np.conj(fvxby)+fby*np.conj(fvyby)+fbz*np.conj(fbyvz))
                          - (np.conj(fbx)*fvxby+np.conj(fby)*fvyby+np.conj(fbz)*fbyvz)
                          + (fvx*np.conj(fbxby)+fvy*np.conj(fbyby)+fvz*np.conj(fbybz))
                          - (np.conj(fvx)*fbxby+np.conj(fvy)*fbyby+np.conj(fvz)*fbybz))
-        del(fbyby,fvxby,fbyvz,fbxby)
+    del(fbyby,fvxby,fbyvz,fbxby)
         
-        fvxbz = ft.fft(vx*Ibz)
-        fvybz = ft.fft(vy*Ibz)
-        fbzbz = ft.fft(Ibz*Ibz)
-        flux_z = ft.ifft(fbz*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fbz)*(fvxbx+fvyby+fvzbz) 
+    fvxbz = transform(vx*Ibz)
+    fvybz = transform(vy*Ibz)
+    fbzbz = transform(Ibz*Ibz)
+    flux_z = inv_transform(fbz*np.conj(fvxbx+fvyby+fvzbz) - np.conj(fbz)*(fvxbx+fvyby+fvzbz) 
                          + (fbx*np.conj(fvxbz)+fby*np.conj(fvybz)+fbz*np.conj(fvzbz))
                          - (np.conj(fbx)*fvxbz+np.conj(fby)*fvybz+np.conj(fbz)*fvzbz)
                          + (fvx*np.conj(fbxbz)+fvy*np.conj(fbybz)+fvz*np.conj(fbzbz))
                          - (np.conj(fvx)*fbxbz+np.conj(fvy)*fbybz+np.conj(fvz)*fbzbz))
-        return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 
+    return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 

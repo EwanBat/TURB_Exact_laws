@@ -40,8 +40,8 @@ class SourceBbdrdj(AbstractTerm):
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
                                       rho, bx, by, bz, divj)
     
-    def calc_fourier(self, rho, bx, by, bz, divj, **kwarg) -> List:
-        return calc_with_fourier(rho, bx, by, bz, divj)
+    def calc_fourier(self, rho, bx, by, bz, divj, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, bx, by, bz, divj, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "b", "divj"]
@@ -68,29 +68,33 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     return f(rhoP, rhoNP, bxP, byP, bzP, bxNP, byNP, bzNP, divjP, divjNP)
 
-def calc_with_fourier(rho, bx, by, bz, divj): 
+def calc_with_fourier(rho, bx, by, bz, divj, traj=False): 
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #dA*B*C'*dD = BB'A'D' + BB'AD - BB'A'D - BB'AD'
-    fbx = ft.fft(bx)
-    fby = ft.fft(by)
-    fbz = ft.fft(bz)
-    frbdx = ft.fft(rho*bx*divj)
-    frbdy = ft.fft(rho*by*divj)
-    frbdz = ft.fft(rho*bz*divj)
+    fbx = transform(bx)
+    fby = transform(by)
+    fbz = transform(bz)
+    frbdx = transform(rho*bx*divj)
+    frbdy = transform(rho*by*divj)
+    frbdz = transform(rho*bz*divj)
     
-    output = ft.ifft(frbdx*np.conj(fbx)+frbdy*np.conj(fby)+frbdz*np.conj(fbz)
+    output = inv_transform(frbdx*np.conj(fbx)+frbdy*np.conj(fby)+frbdz*np.conj(fbz)
                      +np.conj(frbdx)*fbx+np.conj(frbdy)*fby+np.conj(frbdz)*fbz)
 
     del(fbx,fby,fbz,frbdx,frbdy,frbdz)
     
-    frbx = ft.fft(rho*bx)
-    frby = ft.fft(rho*by)
-    frbz = ft.fft(rho*bz)
-    fbdx = ft.fft(bx*divj)
-    fbdy = ft.fft(by*divj)
-    fbdz = ft.fft(bz*divj)
+    frbx = transform(rho*bx)
+    frby = transform(rho*by)
+    frbz = transform(rho*bz)
+    fbdx = transform(bx*divj)
+    fbdy = transform(by*divj)
+    fbdz = transform(bz*divj)
     
-    output -= ft.ifft(fbdx*np.conj(frbx)+fbdy*np.conj(frby)+fbdz*np.conj(frbz)
+    output -= inv_transform(fbdx*np.conj(frbx)+fbdy*np.conj(frby)+fbdz*np.conj(frbz)
                      +np.conj(fbdx)*frbx+np.conj(fbdy)*frby+np.conj(fbdz)*frbz)
     return output/np.size(output)
+
 
 

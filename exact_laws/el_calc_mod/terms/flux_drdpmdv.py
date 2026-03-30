@@ -10,7 +10,8 @@ class FluxDrdpmdv(FluxDrdpisodv):
     def calc(self, vector:List[int], cube_size:List[int], rho, pm, vx, vy, vz, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, pm, vx, vy, vz)
 
-    def calc_fourier(self, rho, pm, vx, vy, vz, **kwarg) -> List:
+    def calc_fourier(self, rho, pm, vx, vy, vz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, pm, vx, vy, vz, traj=traj)
         return calc_with_fourier(rho, pm, vx, vy, vz)
     
     def variables(self) -> List[str]:

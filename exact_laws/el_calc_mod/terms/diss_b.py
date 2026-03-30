@@ -13,8 +13,8 @@ class DissB(ForcV):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho, bx, by, bz, hdmx, hdmy, hdmz)
 
-    def calc_fourier(self, rho, bx, by, bz, hdmx, hdmy, hdmz, **kwarg) -> List:
-        return calc_with_fourier(rho, bx, by, bz, hdmx, hdmy, hdmz)
+    def calc_fourier(self, rho, bx, by, bz, hdmx, hdmy, hdmz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, bx, by, bz, hdmx, hdmy, hdmz, traj=traj)
     
     def variables(self) -> List[str]:
         return ["hdm", "b", "rho"]

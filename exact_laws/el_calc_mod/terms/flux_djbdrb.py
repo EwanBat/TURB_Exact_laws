@@ -51,8 +51,8 @@ class FluxDjbdrb(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], rho, bx, by, bz, jx, jy, jz, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, bx, by, bz, jx, jy, jz)
 
-    def calc_fourier(self, rho, bx, by, bz, jx, jy, jz, **kwarg) -> List:
-        return calc_with_fourier(rho, bx, by, bz, jx, jy, jz)
+    def calc_fourier(self, rho, bx, by, bz, jx, jy, jz, traj=False,**kwarg) -> List:
+        return calc_with_fourier(rho, bx, by, bz, jx, jy, jz, traj=traj)
     
     def variables(self) -> List[str]:
         return ['rho','b','j']
@@ -101,22 +101,26 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     return outx, outy, outz
     
-def calc_with_fourier(rho, bx, by, bz, jx, jy, jz):    
+def calc_with_fourier(rho, bx, by, bz, jx, jy, jz, traj=False):    
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     jbx = jy * bz - by * jz
     jby = jz * bx - bz * jx
     jbz = jx * by - bx * jy
     
-    fjbx = ft.fft(jbx)
-    fjby = ft.fft(jby)
-    fjbz = ft.fft(jbz) 
+    fjbx = transform(jbx)
+    fjby = transform(jby)
+    fjbz = transform(jbz)
     del(jbx,jby,jbz)
     
-    frbx = ft.fft(rho*bx)
-    frby = ft.fft(rho*by)
-    frbz = ft.fft(rho*bz)
+    frbx = transform(rho*bx)
+    frby = transform(rho*by)
+    frbz = transform(rho*bz)
     
-    flux_x = ft.ifft((-np.conj(fjby)*frbz+fjby*np.conj(frbz))-(-np.conj(fjbz)*frby+fjbz*np.conj(frby)))/2 
-    flux_y = ft.ifft((-np.conj(fjbz)*frbx+fjbz*np.conj(frbx))-(-np.conj(fjbx)*frbz+fjbx*np.conj(frbz)))/2
-    flux_z = ft.ifft((-np.conj(fjbx)*frby+fjbx*np.conj(frby))-(-np.conj(fjby)*frbx+fjby*np.conj(frbx)))/2
+    flux_x = inv_transform((-np.conj(fjby)*frbz+fjby*np.conj(frbz))-(-np.conj(fjbz)*frby+fjbz*np.conj(frby)))/2 
+    flux_y = inv_transform((-np.conj(fjbz)*frbx+fjbz*np.conj(frbx))-(-np.conj(fjbx)*frbz+fjbx*np.conj(frbz)))/2
+    flux_z = inv_transform((-np.conj(fjbx)*frby+fjbx*np.conj(frby))-(-np.conj(fjby)*frbx+fjby*np.conj(frbx)))/2
     
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 
+

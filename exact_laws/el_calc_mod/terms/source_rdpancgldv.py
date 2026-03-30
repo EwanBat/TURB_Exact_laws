@@ -16,9 +16,9 @@ class SourceRdpancgldv(SourceRdpandv):
                                       dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
 
     def calc_fourier(self, rho, pperpcgl, pparcgl, pm, bx, by, bz,
-                     dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, **kwarg) -> List:
+                     dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=False, **kwarg) -> List:
         return calc_with_fourier(rho, pperpcgl, pparcgl, pm, bx, by, bz,
-                                      dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
+                                      dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "pcgl", "pm", "gradv", "b"]

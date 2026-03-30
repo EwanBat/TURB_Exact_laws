@@ -45,8 +45,8 @@ class Bg17Vbj(AbstractTerm):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz)
     
-    def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz)
+    def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=traj)
     
     def variables(self) -> List[str]:
         return ['Ij','Ib','v']
@@ -83,19 +83,22 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         IjxP, IjyP, IjzP, IjxNP, IjyNP, IjzNP
     )
     
-def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz):
-    fjx = ft.fft(Ijx)
-    fjy = ft.fft(Ijy)
-    fjz = ft.fft(Ijz)
-    
+def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fjx = transform(Ijx)
+    fjy = transform(Ijy)
+    fjz = transform(Ijz)
+
     vXbx = vy * Ibz - vz * Iby
     vXby = vz * Ibx - vx * Ibz
     vXbz = vx * Iby - vy * Ibx
-    
-    fvXbx = ft.fft(vXbx)
-    fvXby = ft.fft(vXby)
-    fvXbz = ft.fft(vXbz)
+
+    fvXbx = transform(vXbx)
+    fvXby = transform(vXby)
+    fvXbz = transform(vXbz)
     output = 2*np.sum(vXbx*Ijx+vXby*Ijy+vXbz*Ijz)
-    output -= ft.ifft(fvXbx*np.conj(fjx) + np.conj(fvXbx)*fjx + fvXby*np.conj(fjy) + np.conj(fvXby)*fjy + fvXbz*np.conj(fjz) + np.conj(fvXbz)*fjz)
+    output -= inv_transform(fvXbx*np.conj(fjx) + np.conj(fvXbx)*fjx + fvXby*np.conj(fjy) + np.conj(fvXby)*fjy + fvXbz*np.conj(fjz) + np.conj(fvXbz)*fjz)
     
     return output/np.size(output)

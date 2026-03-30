@@ -11,8 +11,8 @@ class SourceRdpperpcgldv(SourceRdpisodv):
     def calc(self, vector: List[int], cube_size: List[int], rho, pperpcgl, divv, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, pperpcgl, divv)
 
-    def calc_fourier(self, rho, pperpcgl, divv, **kwarg) -> List:
-        return calc_with_fourier(rho, pperpcgl, divv)
+    def calc_fourier(self, rho, pperpcgl, divv, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, pperpcgl, divv, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "pcgl", "divv"]

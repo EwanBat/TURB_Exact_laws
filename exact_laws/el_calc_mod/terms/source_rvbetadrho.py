@@ -29,8 +29,8 @@ class SourceRvbetadrho(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho)
 
-    def calc_fourier(self, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, pm, dxrho, dyrho, dzrho)
+    def calc_fourier(self, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "gradrho", "v", "pm"]
@@ -61,16 +61,19 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, pm,
     return (f(rhoP, rhoNP, pmP, vxNP, vyNP, vzNP, dxrhoP, dyrhoP, dzrhoP) 
             + f(rhoNP, rhoP, pmNP, vxP, vyP, vzP, dxrhoNP, dyrhoNP, dzrhoNP) )
     
-def calc_with_fourier(rho, vx, vy, vz, pm, dxrho, dyrho, dzrho):
+def calc_with_fourier(rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A/B'*C'*D*E' + A'/B*C*D'*E 
-    frvx = ft.fft(rho*vx)
-    frvy = ft.fft(rho*vy)
-    frvz = ft.fft(rho*vz)
-    fprdx = ft.fft(pm/rho*dxrho)
-    fprdy = ft.fft(pm/rho*dyrho)
-    fprdz = ft.fft(pm/rho*dzrho)
+    frvx = transform(rho*vx)
+    frvy = transform(rho*vy)
+    frvz = transform(rho*vz)
+    fprdx = transform(pm/rho*dxrho)
+    fprdy = transform(pm/rho*dyrho)
+    fprdz = transform(pm/rho*dzrho)
     
-    output = ft.ifft(frvx*np.conj(fprdx)+frvy*np.conj(fprdy)+frvz*np.conj(fprdz)
+    output = inv_transform(frvx*np.conj(fprdx)+frvy*np.conj(fprdy)+frvz*np.conj(fprdz)
                      +np.conj(frvx)*fprdx+np.conj(frvy)*fprdy+np.conj(frvz)*fprdz)
     return output/np.size(output)
     

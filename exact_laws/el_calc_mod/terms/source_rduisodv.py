@@ -27,8 +27,8 @@ class SourceRduisodv(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int], rho, uiso, divv, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, uiso, divv)
 
-    def calc_fourier(self, rho, uiso, divv, **kwarg) -> List:
-        return calc_with_fourier(rho, uiso, divv)
+    def calc_fourier(self, rho, uiso, divv, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, uiso, divv, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "uiso", "divv"]
@@ -52,13 +52,17 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, uiso, divv,f=njit(SourceR
     divvP, divvNP = divv[ip, jp, kp], divv[i, j, k]
     return f(rhoNP,uisoP,uisoNP,divvP) + f(rhoP,uisoNP,uisoP,divvNP)
 
-def calc_with_fourier(rho, uiso, divv):
+def calc_with_fourier(rho, uiso, divv, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*dB*C' - A'*dB*C = A*B'*C' + A'*B*C - A*B*C' - A'*B'*C
-    fru = ft.fft(rho*uiso)
-    fd = ft.fft(divv)
-    fr = ft.fft(rho)
-    fud = ft.fft(uiso*divv)
-    output = ft.ifft(np.conj(fr)*fud + fr*np.conj(fud) - np.conj(fru)*fd - fru*np.conj(fd))
+    fru = transform(rho*uiso)
+    fd = transform(divv)
+    fr = transform(rho)
+    fud = transform(uiso*divv)
+    output = inv_transform(np.conj(fr)*fud + fr*np.conj(fud) - np.conj(fru)*fd - fru*np.conj(fd))
     return output/np.size(output)
+
 
 

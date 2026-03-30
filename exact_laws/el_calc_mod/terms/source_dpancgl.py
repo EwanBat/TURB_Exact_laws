@@ -26,12 +26,12 @@ class SourceDpanCgl(SourceDpan):
              Ibx, Iby, Ibz,
              dxvx, dyvx, dzvx,
              dxvy, dyvy, dzvy,
-             dxvz, dyvz, dzvz, **kwarg) -> List:
+             dxvz, dyvz, dzvz, traj=False, **kwarg) -> List:
         return calc_with_fourier(Ipperpcgl, Ipparcgl, Ipm,
              Ibx, Iby, Ibz,
              dxvx, dyvx, dzvx,
              dxvy, dyvy, dzvy,
-             dxvz, dyvz, dzvz)
+             dxvz, dyvz, dzvz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["Ipcgl", "Ipm", "gradv", "Ib"]

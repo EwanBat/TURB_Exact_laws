@@ -48,8 +48,8 @@ class FluxDrduisodv(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], rho, uiso, vx, vy, vz, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, uiso, vx, vy, vz)
 
-    def calc_fourier(self, rho, uiso, vx, vy, vz, **kwarg) -> List:
-        return calc_with_fourier(rho, uiso, vx, vy, vz)
+    def calc_fourier(self, rho, uiso, vx, vy, vz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, uiso, vx, vy, vz, traj=traj)
 
     def variables(self) -> List[str]:
         return ['rho','uiso', 'v']
@@ -91,31 +91,34 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, uiso, vx, vy, vz,
     
     return outx, outy, outz
     
-def calc_with_fourier(rho, uiso, vx, vy, vz):
-    fr = ft.fft(rho) 
-    fu = ft.fft(uiso) 
-    fru = ft.fft(rho*uiso) 
+def calc_with_fourier(rho, uiso, vx, vy, vz, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
+    fr = transform(rho)
+    fu = transform(uiso)
+    fru = transform(rho*uiso)
     
-    fvx = ft.fft(vx) 
-    frvx = ft.fft(rho*vx)
-    fuvx = ft.fft(uiso*vx)
-    flux_x = ft.ifft(np.conj(fru)*fvx - fru*np.conj(fvx) 
+    fvx = transform(vx)
+    frvx = transform(rho*vx)
+    fuvx = transform(uiso*vx)
+    flux_x = inv_transform(np.conj(fru)*fvx - fru*np.conj(fvx) 
                      + np.conj(fuvx)*fr - fuvx*np.conj(fr)
                      + np.conj(frvx)*fu - frvx*np.conj(fu))
     del(fvx,frvx,fuvx)
     
-    fvy = ft.fft(vy) 
-    frvy = ft.fft(rho*vy)
-    fuvy = ft.fft(uiso*vy)
-    flux_y = ft.ifft(np.conj(fru)*fvy - fru*np.conj(fvy) 
+    fvy = transform(vy)
+    frvy = transform(rho*vy)
+    fuvy = transform(uiso*vy)
+    flux_y = inv_transform(np.conj(fru)*fvy - fru*np.conj(fvy) 
                      + np.conj(fuvy)*fr - fuvy*np.conj(fr)
                      + np.conj(frvy)*fu - frvy*np.conj(fu))
     del(fvy,frvy,fuvy)
     
-    fvz = ft.fft(vz) 
-    frvz = ft.fft(rho*vz)
-    fuvz = ft.fft(uiso*vz)
-    flux_z = ft.ifft(np.conj(fru)*fvz - fru*np.conj(fvz) 
+    fvz = transform(vz)
+    frvz = transform(rho*vz)
+    fuvz = transform(uiso*vz)
+    flux_z = inv_transform(np.conj(fru)*fvz - fru*np.conj(fvz) 
                      + np.conj(fuvz)*fr - fuvz*np.conj(fr)
                      + np.conj(frvz)*fu - frvz*np.conj(fu))
 

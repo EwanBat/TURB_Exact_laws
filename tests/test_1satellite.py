@@ -115,7 +115,9 @@ term_dvdbdb = FluxDvdbdb()
 
 # Compute flux using Fourier method
 flux_dvdvdv = term_dvdvdv.calc_fourier(dic_quant["vx"], dic_quant["vy"], dic_quant["vz"])
-flux_dbdbdv = term_dbdbdv.calc_fourier(dic_quant["bx"], dic_quant["by"], dic_quant["bz"], dic_quant["vx"], dic_quant["vy"], dic_quant["vz"])
-flux_dvdbdb = term_dvdbdb.calc_fourier(dic_quant["vx"], dic_quant["vy"], dic_quant["vz"], dic_quant["bx"], dic_quant["by"], dic_quant["bz"])
+flux_dbdbdv = term_dbdbdv.calc_fourier(dic_quant["bx"], dic_quant["by"], dic_quant["bz"], 
+                                       dic_quant["vx"], dic_quant["vy"], dic_quant["vz"])
+flux_dvdbdb = term_dvdbdb.calc_fourier(dic_quant["vx"], dic_quant["vy"], dic_quant["vz"], 
+                                       dic_quant["bx"], dic_quant["by"], dic_quant["bz"])
 
 print("✓ Flux terms calculated using Fourier method")

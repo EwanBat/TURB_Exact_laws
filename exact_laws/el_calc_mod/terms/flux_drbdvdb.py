@@ -55,8 +55,8 @@ class FluxDrbdvdb(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], rho, vx, vy, vz, bx, by, bz, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, bx, by, bz)
 
-    def calc_fourier(self, rho, vx, vy, vz, bx, by, bz, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, bx, by, bz)
+    def calc_fourier(self, rho, vx, vy, vz, bx, by, bz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, bx, by, bz, traj=traj)
     
     def variables(self) -> List[str]:
         return ['rho','b','v']
@@ -105,50 +105,53 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     return outx, outy, outz
     
-def calc_with_fourier(rho, vx, vy, vz, bx, by, bz):    
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
-    frbx = ft.fft(rho*bx)
-    frby = ft.fft(rho*by)
-    frbz = ft.fft(rho*bz)
-    frbxvx = ft.fft(rho*bx*vx)
-    frbyvy = ft.fft(rho*by*vy)
-    frbzvz = ft.fft(rho*bz*vz)
-    
-    fbx = ft.fft(bx)
-    fvxbx = ft.fft(vx*bx)
-    fvybx = ft.fft(vy*bx)
-    fvzbx = ft.fft(vz*bx)
-    frbxbx = ft.fft(rho*bx*bx)
-    frbybx = ft.fft(rho*by*bx)
-    frbzbx = ft.fft(rho*bz*bx)
-    flux_x = ft.ifft(fbx*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fbx)*(frbxvx+frbyvy+frbzvz) 
+def calc_with_fourier(rho, vx, vy, vz, bx, by, bz, traj=False):    
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
+    frbx = transform(rho*bx)
+    frby = transform(rho*by)
+    frbz = transform(rho*bz)
+    frbxvx = transform(rho*bx*vx)
+    frbyvy = transform(rho*by*vy)
+    frbzvz = transform(rho*bz*vz)
+
+    fbx = transform(bx)
+    fvxbx = transform(vx*bx)
+    fvybx = transform(vy*bx)
+    fvzbx = transform(vz*bx)
+    frbxbx = transform(rho*bx*bx)
+    frbybx = transform(rho*by*bx)
+    frbzbx = transform(rho*bz*bx)
+    flux_x = inv_transform(fbx*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fbx)*(frbxvx+frbyvy+frbzvz) 
                         + (frbx*np.conj(fvxbx)+frby*np.conj(fvybx)+frbz*np.conj(fvzbx))
                         - (np.conj(frbx)*fvxbx+np.conj(frby)*fvybx+np.conj(frbz)*fvzbx)
                         + (fvx*np.conj(frbxbx)+fvy*np.conj(frbybx)+fvz*np.conj(frbzbx))
                         - (np.conj(fvx)*frbxbx+np.conj(fvy)*frbybx+np.conj(fvz)*frbzbx))
     del(fvxbx,fvybx,fvzbx,fbx,frbxbx)
     
-    fby = ft.fft(by)
-    fvxby = ft.fft(vx*by)
-    fvyby = ft.fft(vy*by)
-    fvzby = ft.fft(vz*by)
-    frbyby = ft.fft(rho*by*by)
-    frbzby = ft.fft(rho*bz*by)
-    flux_y = ft.ifft(fby*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fby)*(frbxvx+frbyvy+frbzvz) 
+    fby = transform(by)
+    fvxby = transform(vx*by)
+    fvyby = transform(vy*by)
+    fvzby = transform(vz*by)
+    frbyby = transform(rho*by*by)
+    frbzby = transform(rho*bz*by)
+    flux_y = inv_transform(fby*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fby)*(frbxvx+frbyvy+frbzvz) 
                         + (frbx*np.conj(fvxby)+frby*np.conj(fvyby)+frbz*np.conj(fvzby))
                         - (np.conj(frbx)*fvxby+np.conj(frby)*fvyby+np.conj(frbz)*fvzby)
                         + (fvx*np.conj(frbybx)+fvy*np.conj(frbyby)+fvz*np.conj(frbzby))
                         - (np.conj(fvx)*frbybx+np.conj(fvy)*frbyby+np.conj(fvz)*frbzby))
     del(fvxby,fvyby,fvzby,fby,frbyby,frbybx)
     
-    fbz = ft.fft(bz)
-    fvxbz = ft.fft(vx*bz)
-    fvybz = ft.fft(vy*bz)
-    fvzbz = ft.fft(vz*bz)
-    frbzbz = ft.fft(rho*bz*bz)
-    flux_z = ft.ifft(fbz*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fbz)*(frbxvx+frbyvy+frbzvz) 
+    fbz = transform(bz)
+    fvxbz = transform(vx*bz)
+    fvybz = transform(vy*bz)
+    fvzbz = transform(vz*bz)
+    frbzbz = transform(rho*bz*bz)
+    flux_z = inv_transform(fbz*np.conj(frbxvx+frbyvy+frbzvz) - np.conj(fbz)*(frbxvx+frbyvy+frbzvz) 
                         + (frbx*np.conj(fvxbz)+frby*np.conj(fvybz)+frbz*np.conj(fvzbz))
                         - (np.conj(frbx)*fvxbz+np.conj(frby)*fvybz+np.conj(frbz)*fvzbz)
                         + (fvx*np.conj(frbzbx)+fvy*np.conj(frbzby)+fvz*np.conj(frbzbz))

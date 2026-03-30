@@ -27,8 +27,8 @@ class DissBinc(AbstractTerm):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, Ibx, Iby, Ibz, )
     
-    def calc_fourier(self, Ibx, Iby, Ibz, **kwarg) -> List:
-        return calc_with_fourier(Ibx, Iby, Ibz, )
+    def calc_fourier(self, Ibx, Iby, Ibz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(Ibx, Iby, Ibz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["Ib",]
@@ -56,11 +56,15 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     return f(bxP, byP, bzP, bxNP, byNP, bzNP)
 
-def calc_with_fourier(bx, by, bz):
-    fbx = ft.fft(bx)
-    fby = ft.fft(by)
-    fbz = ft.fft(bz)
-    
-    output = ft.ifft(fbx*np.conj(fbx) + fby*np.conj(fby) + fbz*np.conj(fbz))
+def calc_with_fourier(bx, by, bz, traj=False):
+    transform = ft.fft(bx, traj=traj)
+    inv_transform = ft.ifft(bx, traj=traj)
+
+    fbx = transform(bx)
+    fby = transform(by)
+    fbz = transform(bz)
+
+    output = inv_transform(fbx*np.conj(fbx) + fby*np.conj(fby) + fbz*np.conj(fbz))
     return output/np.size(output)
     
+

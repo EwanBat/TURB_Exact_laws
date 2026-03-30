@@ -30,8 +30,8 @@ class ForcV(AbstractTerm):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, fx, fy, fz)
     
-    def calc_fourier(self, vx, vy, vz, fx, fy, fz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, fx, fy, fz)
+    def calc_fourier(self, vx, vy, vz, fx, fy, fz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, fx, fy, fz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["f", "v"]
@@ -64,16 +64,19 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         fxP, fyP, fzP, fxNP, fyNP, fzNP
     )
 
-def calc_with_fourier(vx, vy, vz, fx, fy, fz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
+def calc_with_fourier(vx, vy, vz, fx, fy, fz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
     
-    ffx = ft.fft(fx)
-    ffy = ft.fft(fy)
-    ffz = ft.fft(fz)
+    ffx = transform(fx)
+    ffy = transform(fy)
+    ffz = transform(fz)
     
-    output = ft.ifft(ffx*np.conj(fvx) + ffy*np.conj(fvy) + ffz*np.conj(fvz)
+    output = inv_transform(ffx*np.conj(fvx) + ffy*np.conj(fvy) + ffz*np.conj(fvz)
                    + fvx*np.conj(ffx) + fvy*np.conj(ffy) + fvz*np.conj(ffz))
     return output/np.size(output)
     

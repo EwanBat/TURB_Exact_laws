@@ -11,8 +11,8 @@ class SourceRvbetadupol(SourceRvbetadu):
     def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol, **kwarg) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol)
 
-    def calc_fourier(self, rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol)
+    def calc_fourier(self, rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, pm, ppol, dxupol, dyupol, dzupol, traj=traj)
 
     def variables(self) -> List[str]:
         return ["rho", "gradupol", "v", "pm", "ppol"]

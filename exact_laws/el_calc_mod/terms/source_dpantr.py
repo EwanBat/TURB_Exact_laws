@@ -71,12 +71,12 @@ class SourceDpantr(AbstractTerm):
                                       Ibx, Iby, Ibz,
                                       dxvx, dyvx, dzvx,
                                       dxvy, dyvy, dzvy,
-                                      dxvz, dyvz, dzvz, **kwarg) -> List:
+                                      dxvz, dyvz, dzvz, traj=False, **kwarg) -> List:
         return calc_with_fourier(Ipperp, Ippar, Ipm,
                                       Ibx, Iby, Ibz,
                                       dxvx, dyvx, dzvx,
                                       dxvy, dyvy, dzvy,
-                                      dxvz, dyvz, dzvz)
+                                      dxvz, dyvz, dzvz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["Ipgyr", "Ipm", "gradv", "Ib"]
@@ -120,30 +120,34 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP
             ))
                              
-def calc_with_fourier(Ipperp, Ippar, Ipm, Ibx, Iby, Ibz, dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz):
+def calc_with_fourier(Ipperp, Ippar, Ipm, Ibx, Iby, Ibz, dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=False):
+    transform = ft.fft(Ipperp, traj=traj)
+    inv_transform = ft.ifft(Ipperp, traj=traj)
+
     #dA*dB = 2AB - A'B - AB'
     output = 2*np.sum((Ippar - Ipperp) / (2*Ipm) * (Ibx*Ibx*dxvx + Iby*Iby*dyvy + Ibz*Ibz*dzvz
                                                      +Ibx*Iby*(dxvy+dyvx) + Ibx*Ibz*(dxvz+dzvx) + Iby*Ibz*(dzvy+dyvz))
                        + (Ipperp - Ippar)/3 * (dxvx+dyvy+dzvz))
     
-    fpbbxx = ft.fft((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Ibx * Ibx / (2*Ipm)) 
-    fpbbxy = ft.fft((Ippar - Ipperp) * Ibx * Iby / (2*Ipm))
-    fpbbxz = ft.fft((Ippar - Ipperp) * Ibx * Ibz / (2*Ipm))
-    fpbbyy = ft.fft((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Iby * Iby / (2*Ipm))
-    fpbbyz = ft.fft((Ippar - Ipperp) * Iby * Ibz / (2*Ipm))
-    fpbbzz = ft.fft((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Ibz * Ibz / (2*Ipm))
+    fpbbxx = transform((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Ibx * Ibx / (2*Ipm))
+    fpbbxy = transform((Ippar - Ipperp) * Ibx * Iby / (2*Ipm))
+    fpbbxz = transform((Ippar - Ipperp) * Ibx * Ibz / (2*Ipm))
+    fpbbyy = transform((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Iby * Iby / (2*Ipm))
+    fpbbyz = transform((Ippar - Ipperp) * Iby * Ibz / (2*Ipm))
+    fpbbzz = transform((Ipperp - Ippar)/3 + (Ippar - Ipperp) * Ibz * Ibz / (2*Ipm))
     
-    fdxx = ft.fft(dxvx)
-    fdxy = ft.fft(dxvy + dyvx)
-    fdxz = ft.fft(dxvz + dzvx)
-    fdyy = ft.fft(dyvy)
-    fdyz = ft.fft(dzvy + dyvz)
-    fdzz = ft.fft(dzvz)
+    fdxx = transform(dxvx)
+    fdxy = transform(dxvy + dyvx)
+    fdxz = transform(dxvz + dzvx)
+    fdyy = transform(dyvy)
+    fdyz = transform(dzvy + dyvz)
+    fdzz = transform(dzvz)
     
-    output -= ft.ifft(fpbbxx*np.conj(fdxx) + fpbbxy*np.conj(fdxy) + fpbbxz*np.conj(fdxz)
+    output -= inv_transform(fpbbxx*np.conj(fdxx) + fpbbxy*np.conj(fdxy) + fpbbxz*np.conj(fdxz)
                       + fpbbyy*np.conj(fdyy) + fpbbyz*np.conj(fdyz) + fpbbzz*np.conj(fdzz)
                       + np.conj(fpbbxx)*fdxx + np.conj(fpbbxy)*fdxy + np.conj(fpbbxz)*fdxz
                       + np.conj(fpbbyy)*fdyy + np.conj(fpbbyz)*fdyz + np.conj(fpbbzz)*fdzz) 
     
     return output/np.size(output)
     
+

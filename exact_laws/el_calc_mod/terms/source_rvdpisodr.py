@@ -37,8 +37,8 @@ class SourceRvdpisodr(AbstractTerm):
     ) -> List[float]:
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, piso, dxrho, dyrho, dzrho)
 
-    def calc_fourier(self, rho, vx, vy, vz, piso, dxrho, dyrho, dzrho, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, piso, dxrho, dyrho, dzrho)
+    def calc_fourier(self, rho, vx, vy, vz, piso, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, piso, dxrho, dyrho, dzrho, traj=traj)
     
     def variables(self) -> List[str]:
         return ["rho", "gradrho", "v", "piso"]
@@ -67,26 +67,29 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, piso, dxrho, 
     return (f(rhoP, rhoNP, pisoP, pisoNP, vxNP, vyNP, vzNP, dxrhoP, dyrhoP, dzrhoP) 
             + f(rhoNP, rhoP, pisoNP, pisoP, vxP, vyP, vzP, dxrhoNP, dyrhoNP, dzrhoNP) )
     
-def calc_with_fourier(rho, vx, vy, vz, piso, dxrho, dyrho, dzrho):
+def calc_with_fourier(rho, vx, vy, vz, piso, dxrho, dyrho, dzrho, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*dB*C*D'/E' - A'*dB*C'*D/E = A*B'*C*D'/E' + A'*B*C'*D/E - A*B*C*D'/E' - A'*B'*C'*D/E
-    frvx = ft.fft(rho*vx)
-    frvy = ft.fft(rho*vy)
-    frvz = ft.fft(rho*vz)
-    fpdrx = ft.fft(piso*dxrho/rho)
-    fpdry = ft.fft(piso*dyrho/rho)
-    fpdrz = ft.fft(piso*dzrho/rho)
+    frvx = transform(rho*vx)
+    frvy = transform(rho*vy)
+    frvz = transform(rho*vz)
+    fpdrx = transform(piso*dxrho/rho)
+    fpdry = transform(piso*dyrho/rho)
+    fpdrz = transform(piso*dzrho/rho)
     
-    output = ft.ifft(fpdrx*np.conj(frvx)+fpdry*np.conj(frvy)+fpdrz*np.conj(frvz)
+    output = inv_transform(fpdrx*np.conj(frvx)+fpdry*np.conj(frvy)+fpdrz*np.conj(frvz)
                      +np.conj(fpdrx)*frvx+np.conj(fpdry)*frvy+np.conj(fpdrz)*frvz)
     del(fpdrx,fpdry,fpdrz,frvx,frvy,frvz)
     
-    frpvx = ft.fft(rho*piso*vx)
-    frpvy = ft.fft(rho*piso*vy)
-    frpvz = ft.fft(rho*piso*vz)
-    fdrx = ft.fft(dxrho/rho)
-    fdry = ft.fft(dyrho/rho)
-    fdrz = ft.fft(dzrho/rho)
+    frpvx = transform(rho*piso*vx)
+    frpvy = transform(rho*piso*vy)
+    frpvz = transform(rho*piso*vz)
+    fdrx = transform(dxrho/rho)
+    fdry = transform(dyrho/rho)
+    fdrz = transform(dzrho/rho)
     
-    output -= ft.ifft(fdrx*np.conj(frpvx)+fdry*np.conj(frpvy)+fdrz*np.conj(frpvz)
+    output -= inv_transform(fdrx*np.conj(frpvx)+fdry*np.conj(frpvy)+fdrz*np.conj(frpvz)
                      +np.conj(fdrx)*frpvx+np.conj(fdry)*frpvy+np.conj(fdrz)*frpvz)
     return output/np.size(output)

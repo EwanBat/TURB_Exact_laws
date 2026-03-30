@@ -99,24 +99,27 @@ def calc_in_point_with_sympy(
                       dyvxNP, dyvyNP, dyvzNP, dzvxNP, dzvyNP, dzvzNP))
 
 def calc_with_fourier(rho, pperp, ppar, pm, bx, by, bz,
-        dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz):
+    dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*dB*C' - A'*dB*C = A*B'*C' + A'*B*C - A*B*C' - A'*B'*C
-    fr = ft.fft(rho)
-    fpd = ft.fft((ppar - pperp) / (2*pm) * (bx*bx*dxvx + by*by*dyvy + bz*bz*dzvz 
+    fr = transform(rho)
+    fpd = transform((ppar - pperp) / (2*pm) * (bx*bx*dxvx + by*by*dyvy + bz*bz*dzvz 
                                             + bx*by*(dxvy+dyvx) + bx*bz*(dxvz+dzvx) + by*bz*(dyvz+dzvy)))
-    frpxx = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * bx)
-    frpxy = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * by)
-    frpxz = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * bz)
-    frpyy = ft.fft(rho * (ppar - pperp) / (2*pm) * by * by)
-    frpyz = ft.fft(rho * (ppar - pperp) / (2*pm) * by * bz)
-    frpzz = ft.fft(rho * (ppar - pperp) / (2*pm) * bz * bz)
-    fdxx = ft.fft(dxvx)
-    fdxy = ft.fft(dxvy+dyvx)
-    fdxz = ft.fft(dxvz+dzvx)
-    fdyy = ft.fft(dyvy)
-    fdzz = ft.fft(dzvz)
-    fdyz = ft.fft(dzvy+dyvz)
-    output = ft.ifft(fr*np.conj(fpd) + np.conj(fr)*fpd
+    frpxx = transform(rho * (ppar - pperp) / (2*pm) * bx * bx)
+    frpxy = transform(rho * (ppar - pperp) / (2*pm) * bx * by)
+    frpxz = transform(rho * (ppar - pperp) / (2*pm) * bx * bz)
+    frpyy = transform(rho * (ppar - pperp) / (2*pm) * by * by)
+    frpyz = transform(rho * (ppar - pperp) / (2*pm) * by * bz)
+    frpzz = transform(rho * (ppar - pperp) / (2*pm) * bz * bz)
+    fdxx = transform(dxvx)
+    fdxy = transform(dxvy+dyvx)
+    fdxz = transform(dxvz+dzvx)
+    fdyy = transform(dyvy)
+    fdzz = transform(dzvz)
+    fdyz = transform(dzvy+dyvz)
+    output = inv_transform(fr*np.conj(fpd) + np.conj(fr)*fpd
                    - (frpxx*np.conj(fdxx) + frpyy*np.conj(fdyy) + frpzz*np.conj(fdzz)
                       + frpxy*np.conj(fdxy) + frpxz*np.conj(fdxz) + frpyz*np.conj(fdyz))
                    - (fdxx*np.conj(frpxx) + fdyy*np.conj(frpyy) + fdzz*np.conj(frpzz)

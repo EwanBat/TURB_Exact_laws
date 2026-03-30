@@ -43,8 +43,8 @@ class FluxDvdvdv(AbstractTerm):
     def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, **kwarg) -> List[float]:
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz)
     
-    def calc_fourier(self, vx, vy, vz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz)
+    def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, traj=traj)
 
     def variables(self) -> List[str]:
         return ['v']
@@ -89,24 +89,28 @@ def calc_in_point(i, j, k, ip, jp, kp, vx, vy, vz):
     
     return fx, fy, fz
 
-def calc_with_fourier(vx, vy, vz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
-    fvxvx = ft.fft(vx*vx)
-    fvyvy = ft.fft(vy*vy)
-    fvzvz = ft.fft(vz*vz)
-    fvxvy = ft.fft(vx*vy)
-    fvxvz = ft.fft(vx*vz)
-    flux_x = ft.ifft(fvx*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvx)*(fvxvx+fvyvy+fvzvz) 
+def calc_with_fourier(vx, vy, vz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
+    fvxvx = transform(vx*vx)
+    fvyvy = transform(vy*vy)
+    fvzvz = transform(vz*vz)
+    fvxvy = transform(vx*vy)
+    fvxvz = transform(vx*vz)
+    flux_x = inv_transform(fvx*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvx)*(fvxvx+fvyvy+fvzvz) 
                         + 2*(fvx*np.conj(fvxvx)+fvy*np.conj(fvxvy)+fvz*np.conj(fvxvz))
                         - 2*(np.conj(fvx)*fvxvx+np.conj(fvy)*fvxvy+np.conj(fvz)*fvxvz))
-    fvyvz = ft.fft(vy*vz)
-    flux_y = ft.ifft(fvy*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvy)*(fvxvx+fvyvy+fvzvz) 
+    fvyvz = transform(vy*vz)
+    flux_y = inv_transform(fvy*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvy)*(fvxvx+fvyvy+fvzvz) 
                         + 2*(fvx*np.conj(fvxvy)+fvy*np.conj(fvyvy)+fvz*np.conj(fvyvz))
                         - 2*(np.conj(fvx)*fvxvy+np.conj(fvy)*fvyvy+np.conj(fvz)*fvyvz))
     del(fvxvy)
-    flux_z = ft.ifft(fvz*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvz)*(fvxvx+fvyvy+fvzvz) 
+    flux_z = inv_transform(fvz*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvz)*(fvxvx+fvyvy+fvzvz) 
                         + 2*(fvx*np.conj(fvxvz)+fvy*np.conj(fvyvz)+fvz*np.conj(fvzvz))
                         - 2*(np.conj(fvx)*fvxvz+np.conj(fvy)*fvyvz+np.conj(fvz)*fvzvz))
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 
+

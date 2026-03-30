@@ -29,8 +29,8 @@ class CorRu(AbstractTerm):
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho,  ugyr)
 
-    def calc_fourier(self, rho, ugyr, **kwarg) -> List:
-        return calc_with_fourier(rho, ugyr)
+    def calc_fourier(self, rho, ugyr, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, ugyr, traj=traj)
     
     def variables(self) -> List[str]:
         return [ "rho", "ugyr"]
@@ -62,10 +62,14 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         uP, uNP
     )
     
-def calc_with_fourier(rho, ugyr):
+def calc_with_fourier(rho, ugyr, traj=False):
 
-    frho = ft.fft(rho)
-    fu = ft.fft(ugyr)
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
+    frho = transform(rho)
+    fu = transform(ugyr)
     
-    output = ft.ifft(frho*np.conj(fu)+np.conj(frho)*fu)/2
+    output = inv_transform(frho*np.conj(fu)+np.conj(frho)*fu)/2
     return output/np.size(output)
+
