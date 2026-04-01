@@ -115,12 +115,15 @@ def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, ce
     np.ndarray
         Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    # X progression with pitch
-    x = (t / N[0]) * pitch
-    
-    # Normalized angle parameter
-    theta = 2 * np.pi * t / N[0]
-    
+    # Number of complete rotations needed to cover the grid
+    num_rotations = round((N[0] - 1) / pitch)
+
+    # Angle progresses through multiple rotations
+    theta = 2 * np.pi * num_rotations * t / (N[0] - 1)
+
+    # X progresses across entire grid (0 to N[0]-1)
+    x = t  
+
     y = center_y + radius * np.cos(theta)
     z = center_z + radius * np.sin(theta)
     
@@ -194,7 +197,6 @@ def load_oca_data(input_folder, cycle, sim_type):
     """
     logging.info("\n" + "="*70)
     logging.info("LOADING OCA DATA")
-    logging.info("="*70)
     
     dic_datas = {}
     dic_param = {}
@@ -240,7 +242,6 @@ def load_oca_data(input_folder, cycle, sim_type):
     # Print summary
     logging.info("\n" + "-"*70)
     logging.info("DATA LOADING SUMMARY")
-    logging.info("-"*70)
     logging.info(f"  Grid dimensions (N):  {dic_param['N']}")
     logging.info(f"  Domain size (L):      {dic_param['L']}")
     logging.info(f"  Cell spacing (c):     {dic_param['c']}")
@@ -377,14 +378,12 @@ def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict
     y = ly[trajectory[:, 1]]
     z = lz[trajectory[:, 2]]
 
-    dic_param['lx'] = lx
-    dic_param['ly'] = ly
-    dic_param['lz'] = lz
+    dic_param['lx'] = x
+    dic_param['ly'] = y
+    dic_param['lz'] = z
 
-def preprocess_trajectory_from_ini(ini_file, 
-                                   trajectory_func: Callable = None,
-                                   trajectory_kwargs: dict = None,
-                                   input_folder: str = "data_oca",
+def preprocess_trajectory_from_ini(ini_file,
+                                   input_folder: str = "",
                                    verbose: bool = True):
     """
     Load configuration from an INI file and preprocess along a trajectory.
@@ -393,11 +392,6 @@ def preprocess_trajectory_from_ini(ini_file,
     -----------
     ini_file : str
         Path to the configuration .ini file (ex: "traj_satellite.ini")
-    trajectory_func : Callable, optional
-        Function returning a trajectory: f(t, N, **trajectory_kwargs) -> np.ndarray (n_points, 3)
-        If None, uses trajectory_linear_x with y_pos=100, z_pos=100
-    trajectory_kwargs : dict, optional
-        Additional arguments for trajectory_func (all in indices, not physical units)
     input_folder : str
         Path to folder containing OCA data
     verbose : bool
@@ -419,7 +413,6 @@ def preprocess_trajectory_from_ini(ini_file,
     if verbose:
         logging.info("\n" + "="*70)
         logging.info(f"PREPROCESSING TRAJECTORY FROM {ini_file}")
-        logging.info("="*70)
     
     # Check that the file exists
     ini_path = Path(ini_file)
@@ -464,6 +457,8 @@ def preprocess_trajectory_from_ini(ini_file,
         cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
         sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
         di = config["PHYSICAL_PARAMS"].getfloat("di", 1.0)
+        trajectory_method = config["RUN_PARAMS"].get("trajectory_method", "linear_x")
+        trajectory_kwargs = eval(config["RUN_PARAMS"].get("trajectory_kwargs", "{}"))
     except Exception as e:
         logging.error(f"Error reading parameters: {e}")
         raise
@@ -491,22 +486,24 @@ def preprocess_trajectory_from_ini(ini_file,
     if verbose:
         logging.info("\n" + "-"*70)
         logging.info("DETERMINING REQUIRED QUANTITIES")
-        logging.info("-"*70)
         logging.info(f"  Nbsatellite = {nbsatellite} -> gradients {'enabled' if nbsatellite > 1 else 'disabled'}")
     
     # Default trajectory if none provided
-    if trajectory_func is None:
+    if trajectory_method == "linear_x":
         trajectory_func = trajectory_linear_x
-        trajectory_kwargs = {'y_pos': 100, 'z_pos': 100}
-    
-    if trajectory_kwargs is None:
-        trajectory_kwargs = {}
+    elif trajectory_method == "circular_xy":
+        trajectory_func = trajectory_circular_xy
+    elif trajectory_method == "helical":
+        trajectory_func = trajectory_helical
+    elif trajectory_method == "diagonal":
+        trajectory_func = trajectory_diagonal
+    else:
+        raise ValueError(f"Unsupported trajectory method: {trajectory_method}")
     
     # Generate trajectory
     if verbose:
         logging.info("\n" + "-"*70)
         logging.info("GENERATING TRAJECTORY")
-        logging.info("-"*70)
         logging.info(f"  Trajectory function: {trajectory_func.__name__}")
         logging.info(f"  Trajectory kwargs:   {trajectory_kwargs}")
         logging.info(f"  Number of satellites: {nbsatellite}")
@@ -533,7 +530,6 @@ def preprocess_trajectory_from_ini(ini_file,
     if verbose:
         logging.info("\n" + "-"*70)
         logging.info("EXTRACTING DATA ALONG TRAJECTORY")
-        logging.info("-"*70)
     
     dic_datas = extract_quantities_along_trajectory(
         dic_datas_3d, 
@@ -584,5 +580,6 @@ def preprocess_trajectory_from_ini(ini_file,
         },
         'dic_datas': dic_datas,  # 1D data extracted along trajectory/trajectories
         'dic_param': dic_param,
-        'trajectory': trajectory
+        'trajectory': trajectory,
+        'trajectory_name': trajectory_func.__name__.split('_', 1)[-1]  # e.g. "linear_x", "circular_xy"
     }

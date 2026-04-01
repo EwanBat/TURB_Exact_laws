@@ -232,6 +232,8 @@ def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=Non
     required_terms = list_required_terms(laws, dic_param=dic_param)
     
     if verbose:
+        logger.info("\n" + "-"*70)
+        logger.info("FLUX AND SOURCE TERMS COMPUTATION ALONG TRAJECTORY")
         logger.info(f"Computing {len(required_terms)} terms")
         logger.info(f"Required terms: {required_terms}")
     

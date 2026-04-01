@@ -473,6 +473,8 @@ def extract_trajectory_and_compute(dic_quant, dic_param=None,
     trajectory_data = dic_quant.copy()
     
     if verbose:
+        logger.info("\n" + "-"*70)
+        logger.info("QUANTITIES COMPUTATION ALONG TRAJECTORY")
         logger.info(f"Nbsatellite: {nbsatellite}")
         logger.info(f"Separation: {separation}")
     
