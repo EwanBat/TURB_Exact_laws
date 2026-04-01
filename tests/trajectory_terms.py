@@ -9,10 +9,7 @@ import numpy as np
 import logging
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
-from trajectory_quantities import (
-    list_required_quantities,
-    compute_all_available_quantities
-)
+from trajectory_quantities import list_computable_quantities
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +130,7 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     return concrete_data
 
 
-def compute_term_from_TERMS(term_name, dic_quant, dic_param, verbose=False):
+def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verbose=False):
     """
     Calcule un terme en utilisant la méthode calc_fourier de TERMS.
     Adapté pour les données 1D de trajectoires.
@@ -165,11 +162,34 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, verbose=False):
         # Récupérer les variables abstraites requises par le terme
         abstract_vars = term_obj.variables()
         
-        # Convertir en composantes concrètes
-        args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
-        
-        # Calculer le terme avec traj=True pour indiquer une trajectoire
-        result = term_obj.calc_fourier(*args, traj=True)
+        if nbsatellite == 1:
+            # Convertir en composantes concrètes
+            args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
+
+            # Appeler calc_fourier pour les données 1D
+            result = term_obj.calc_fourier(*args, dic_param=dic_param)
+        elif nbsatellite == 4:
+            for sat_name in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
+                # Extraire les données pour ce satellite
+                dic_quant_sat = {}
+                dic_param_sat = {}
+                for key, value in dic_quant.items():
+                    dic_quant_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
+                for key, value in dic_param.items():
+                    dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
+                
+                # Convertir les variables abstraites en composantes concrètes pour ce satellite
+                args_sat = get_concrete_variables_from_abstract(abstract_vars, dic_quant_sat)
+                
+                # Calculer le terme pour ce satellite
+                result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat)
+                
+                # Stocker le résultat dans un dictionnaire par satellite
+                if 'result' not in locals():
+                    result = {}
+                result[sat_name] = result_sat
+        else:
+            raise ValueError(f"Unsupported number of satellites: {nbsatellite}")
         
         # Convertir le résultat en array numpy
         if isinstance(result, list):
@@ -188,7 +208,7 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, verbose=False):
     return result
 
 
-def compute_all_terms_for_laws(dic_quant, dic_param, laws=None, verbose=False):
+def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=None, nbsatellite=1, verbose=False):
     """
     Calcule tous les termes requis pour les lois données.
     Les quantités dérivées sont calculées automatiquement avant les termes.
@@ -201,6 +221,8 @@ def compute_all_terms_for_laws(dic_quant, dic_param, laws=None, verbose=False):
         Paramètres de simulation
     laws : list[str]
         Liste des lois
+    nbsatellite : int
+        Nombre de satellites
     verbose : bool
     
     Retour:
@@ -218,89 +240,22 @@ def compute_all_terms_for_laws(dic_quant, dic_param, laws=None, verbose=False):
         logger.info(f"Computing {len(required_terms)} terms")
         logger.info(f"Required terms: {required_terms}")
     
-    # Get required quantities for these terms and compute them
-    required_quantities = list_required_quantities(laws=laws)
-    if verbose:
-        logger.info(f"Required quantities for terms: {required_quantities}")
-    
-    # Compute all available quantities (this will calculate v, b, Ib, etc. from raw data)
-    dic_quant_complete = compute_all_available_quantities(
-        dic_quant, dic_param, required_quantities, verbose=verbose
-    )
-    
     result = {}
     
     for term_name in required_terms:
         try:
-            computed = compute_term_from_TERMS(term_name, dic_quant_complete, dic_param, verbose)
+            computed = compute_term_from_TERMS(term_name, 
+                    dic_quantities, 
+                    dic_param, 
+                    nbsatellite=nbsatellite, 
+                    verbose=verbose)
+            
             result[term_name] = computed
         except Exception as e:
             if verbose:
                 logger.error(f"Failed to compute {term_name}: {str(e)}")
     
     return result
-
-
-def extract_trajectory_and_compute_terms(dic_quant, y_pos, z_pos, dic_param=None, 
-                                         laws=None, verbose=False):
-    """
-    Extrait une trajectoire 1D et calcule les termes.
-    
-    Paramètres:
-    -----------
-    dic_quant : dict
-        Dictionnaire des données 3D
-    y_pos : int
-        Position y de la trajectoire
-    z_pos : int
-        Position z de la trajectoire
-    dic_param : dict
-        Paramètres (optionnels)
-    laws : list[str]
-        Lois dont on veut calculer les termes
-    verbose : bool
-    
-    Retour:
-    -------
-    dict : Dictionnaire des termes calculés
-    """
-    
-    if dic_param is None:
-        dic_param = {}
-    
-    if laws is None:
-        laws = []
-    
-    # Extract 1D trajectory
-    trajectory_data = {}
-    
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            trajectory_data[key] = dic_quant[key][:, y_pos, z_pos]
-        else:
-            trajectory_data[key] = dic_quant[key]
-    
-    # Add means if available
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            if key == "ppar":
-                dic_param["meanppar"] = np.mean(dic_quant[key])
-            elif key == "pperp":
-                dic_param["meanpperp"] = np.mean(dic_quant[key])
-            elif key == "rho":
-                dic_param["rho_mean"] = np.mean(dic_quant[key])
-    
-    if verbose:
-        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
-        array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
-        if array_keys:
-            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
-    
-    # Compute all terms for laws
-    dic_terms = compute_all_terms_for_laws(trajectory_data, dic_param, laws, verbose)
-    
-    return dic_terms
-
 
 def display_results(dic_terms, title="Results along trajectory"):
     """

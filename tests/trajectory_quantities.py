@@ -1,8 +1,9 @@
-# trajectory_quantities.py - VERSION SIMPLIFIÉE
+# trajectory_quantities.py - VERSION AVEC SUPPORT GRADIENT
 """
 Module pour calculer les quantités non-dérivatives le long d'une trajectoire.
 Analogue à process_on_oca_files.py mais adapté aux trajectoires et utilisant QUANTITIES.
 Les quantités (v ou Iv, etc.) sont déterminées par les variables requises des lois.
+Support pour gradient et divergence avec formations de 4 satellites.
 """
 
 import numpy as np
@@ -17,8 +18,6 @@ from exact_laws.el_calc_mod.terms import TERMS
 logger = logging.getLogger(__name__)
 
 # ========== MAPPING DES QUANTITÉS ET LEURS DÉPENDANCES ==========
-# Toutes les quantités (compressible et incompressible) dans un même dictionnaire
-# La version correcte (v ou Iv) est déterminée par les lois
 
 QUANTITY_DEPENDENCIES = {
     # === Données brutes ===
@@ -62,51 +61,46 @@ QUANTITY_DEPENDENCIES = {
     "Iupol": {"requires": ["pperp"]},
 }
 
+# Quantités de gradients et divergences avec leurs dépendances
+GRADIENT_QUANTITIES = {
+    'gradv': {'requires': ['vx', 'vy', 'vz']},
+    'gradv2': {'requires': ['v2']},  # v2 dépend de vx, vy, vz
+    'gradrho': {'requires': ['rho']},
+    'graduiso': {'requires': ['uiso']},  # uiso dépend de ppar, pperp, rho
+    'gradupol': {'requires': ['upol']},  # upol dépend de ppar, pperp, rho
+    'gradugyr': {'requires': ['ugyr']},  # ugyr dépend de pperp, rho
+    'gradpcgl': {'requires': ['pcgl']},  # pcgl dépend de bx, by, bz, rho, ppar, pperp
+    'divv': {'requires': ['vx', 'vy', 'vz']},
+    'divb': {'requires': ['bx', 'by', 'bz']},
+    'divj': {'requires': ['jx', 'jy', 'jz']},
+    'Igradv': {'requires': ['Ivx', 'Ivy', 'Ivz']},
+    'Igradv2': {'requires': ['Iv2']},
+    'Igradrho': {'requires': ['Irho']},
+    'Igraduiso': {'requires': ['Iuiso']},
+    'Igradupol': {'requires': ['Iupol']},
+}
 
-def load_config_from_ini(config_file):
+def list_computable_quantities(dic_quant, laws=None, terms=None, quantities=None, nbsatellite=1):
     """
-    Charge les paramètres depuis un fichier .ini
+    Liste les quantités calculables à partir des données et des exigences.
     
-    Retour:
-    -------
-    tuple : (laws, terms, quantities, physical_params)
-    """
-    config = configparser.ConfigParser()
-    config.read(config_file)
-    
-    laws = eval(config["OUTPUT_DATA"].get("laws", "[]"))
-    terms = eval(config["OUTPUT_DATA"].get("terms", "[]"))
-    quantities = eval(config["OUTPUT_DATA"].get("quantities", "[]"))
-    
-    physical_params = {}
-    if "PHYSICAL_PARAMS" in config:
-        for key in config["PHYSICAL_PARAMS"].keys():
-            try:
-                physical_params[key] = float(eval(config["PHYSICAL_PARAMS"][key]))
-            except:
-                physical_params[key] = config["PHYSICAL_PARAMS"][key]
-    
-    return laws, terms, quantities, physical_params
-
-
-def list_required_quantities(laws=None, terms=None, quantities=None):
-    """
-    Retourne la liste des quantités requises pour calculer les lois et termes donnés.
-    Les versions correctes (v ou Iv) viennent des variables des lois.
+    Combine l'extraction des exigences (lois/termes) avec la vérification 
+    de disponibilité basée sur les données et nbsatellite.
     
     Paramètres:
     -----------
-    laws : list[str]
-        Liste des noms des lois
-    terms : list[str]
-        Liste des noms des termes
-    quantities : list[str]
-        Liste des quantités à ajouter directement
+    dic_quant : dict
+        Dictionnaire des données disponibles
+    laws, terms, quantities : list, optional
+        Spécifications des exigences
+    nbsatellite : int
+        Nombre de satellites (filtre les gradients si < 4)
     
     Retour:
     -------
-    set : Ensemble des quantités requises
+    list : Quantités calculables
     """
+    # === ÉTAPE 1 : Extraire les exigences ===
     if quantities is None:
         quantities = []
     else:
@@ -126,64 +120,169 @@ def list_required_quantities(laws=None, terms=None, quantities=None):
                 law_variables = LAWS[law_name].variables()
                 quantities.extend(law_variables)
     
-    return set(quantities)
-
-
-def get_available_quantities_for_requirements(dic_quant, required_quantities):
-    """
-    Retourne la liste des quantités disponibles à partir des données et des exigences.
-    Les quantités (v ou Iv) sont déjà correctement spécifiées dans required_quantities.
+    required_quantities = set(quantities)
     
-    Paramètres:
-    -----------
-    dic_quant : dict
-        Dictionnaire des données brutes ou 1D
-    required_quantities : set
-        Ensemble des quantités requises
+    # === ÉTAPE 2 : Filtrer les gradients selon nbsatellite ===
+    if nbsatellite < 4:
+        required_quantities = {q for q in required_quantities if q not in GRADIENT_QUANTITIES}
     
-    Retour:
-    -------
-    list : Liste des quantités calculables
-    """
+    # === ÉTAPE 3 : Vérifier la disponibilité ===
+    # Combiner les dépendances normales et des gradients
+    all_dependencies = {**QUANTITY_DEPENDENCIES, **GRADIENT_QUANTITIES}
+    
     available = []
-    
     for quantity_name in required_quantities:
-        if quantity_name not in QUANTITY_DEPENDENCIES:
+        if quantity_name not in all_dependencies:
+            # Quantité non documentée - on la tente quand même si elle existe
+            if quantity_name in dic_quant:
+                available.append(quantity_name)
             continue
         
         # Check if it's a direct raw quantity
         if quantity_name in dic_quant:
             available.append(quantity_name)
         # Check if it's a derived quantity we can compute
-        elif all(req in dic_quant or req in available for req in QUANTITY_DEPENDENCIES[quantity_name]["requires"]):
+        elif all(req in dic_quant or req in available for req in all_dependencies[quantity_name]["requires"]):
             available.append(quantity_name)
     
     return available
 
 
-def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, verbose=False):
+def compute_gradient_stub(quantity_name: str, dic_quant: dict, separation: float = 1.0) -> np.ndarray:
     """
-    Calcule une quantité en utilisant les objets de QUANTITIES.
-    Adapté pour les données 1D de trajectoires.
+    Calcule une approximation du gradient d'une quantité.
+    
+    Utilise une fausse implémentation en attente d'une version propre.
+    Assume que dic_quant[quantity_name] est un dictionnaire {sat_0, sat_1, sat_2, sat_3}
     
     Paramètres:
     -----------
     quantity_name : str
-        Nom complet de la quantité (ex: "v2", "Iv2", "bnorm")
+        Nom de la quantité dont on veut le gradient
     dic_quant : dict
-        Dictionnaire des données 1D (trajectoire)
-    dic_param : dict
-        Paramètres de simulation
-    verbose : bool
+        Dictionnaire contenant les données pour les 4 satellites
+    separation : float
+        Séparation entre les satellites en unités de grille
+    
+    Retour:
+    -------
+    dict : {sat_name: gradient_vector (n_points, 3)} ou (n_points, 3) selon la quantité
+    """
+    
+    # Récupérer les données de base (sans le "grad")
+    base_quantity = quantity_name.lstrip('I').replace('grad', '')
+    
+    if base_quantity not in dic_quant:
+        raise ValueError(f"Quantité de base '{base_quantity}' non trouvée pour calculer {quantity_name}")
+    
+    data_per_sat = dic_quant[base_quantity]
+    
+    if not isinstance(data_per_sat, dict):
+        raise ValueError(f"{base_quantity} ne contient pas de données par satellite")
+    
+    n_points = len(data_per_sat['sat_0'])
+    
+    # Initialiser le résultat
+    result = np.zeros((n_points, 3))
+    
+    # Récupérer les données pour chaque satellite
+    sat_0 = data_per_sat['sat_0']  # avant, haut
+    sat_1 = data_per_sat['sat_1']  # avant, bas
+    sat_2 = data_per_sat['sat_2']  # arrière, haut
+    sat_3 = data_per_sat['sat_3']  # arrière, bas
+    
+    # Approximation du gradient (fausse implémentation)
+    # À remplacer par une vraie interpolation spatiale
+    
+    # ∂f/∂x ≈ (f_avant - f_arrière) / (2 * separation)
+    # Moyenne entre haut et bas pour avant et arrière
+    f_avant = (sat_0 + sat_1) / 2.0
+    f_arriere = (sat_2 + sat_3) / 2.0
+    result[:, 0] = (f_avant - f_arriere) / (separation if separation > 0 else 1.0)
+    
+    # ∂f/∂y ≈ (f_haut - f_bas) / (2 * separation)
+    # Moyenne entre avant et arrière pour haut et bas
+    f_haut = (sat_0 + sat_2) / 2.0
+    f_bas = (sat_1 + sat_3) / 2.0
+    result[:, 1] = (f_haut - f_bas) / (separation if separation > 0 else 1.0)
+    
+    # ∂f/∂z ≈ 0 (pas de variation en z avec 4 satellites dans le plan xy)
+    result[:, 2] = 0.0
+    
+    logger.warning(f"STUB: Gradient de {quantity_name} calculé avec approximation simple")
+    
+    return result
+
+
+def compute_divergence_stub(base_quantity: str, dic_quant: dict, separation: float = 1.0) -> np.ndarray:
+    """
+    Calcule une approximation de la divergence d'un vecteur.
+    
+    Utilise une fausse implémentation en attente d'une version propre.
+    
+    Paramètres:
+    -----------
+    base_quantity : str
+        Nom du vecteur (ex: "v", "b", "j")
+    dic_quant : dict
+        Dictionnaire contenant les données pour les 4 satellites
+    separation : float
+        Séparation entre les satellites
+    
+    Retour:
+    -------
+    np.ndarray : (n_points,) - divergence
+    """
+    
+    if base_quantity not in dic_quant:
+        raise ValueError(f"Quantité '{base_quantity}' non trouvée pour calculer divergence")
+    
+    data_per_sat = dic_quant[base_quantity]
+    
+    if not isinstance(data_per_sat, dict):
+        raise ValueError(f"{base_quantity} ne contient pas de données par satellite")
+    
+    n_points = len(data_per_sat['sat_0'])
+    
+    # Récupérer les composantes vectorielles
+    components = f"{base_quantity}x", f"{base_quantity}y", f"{base_quantity}z"
+    
+    # Approximation stub : divergence ≈ 0
+    # À remplacer par une vraie implémentation
+    result = np.zeros(n_points)
+    
+    logger.warning(f"STUB: Divergence de {base_quantity} = 0 (implémentation stub)")
+    
+    return result
+
+
+def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, nbsatellite=1, 
+                                     separation=1.0, verbose=False):
+    """
+    Calcule une quantité en utilisant les objets de QUANTITIES.
+    Adapté pour les données 1D de trajectoires avec support gradient.
     """
     
     if verbose:
-        logger.info(f"Computing {quantity_name}...")
+        logger.info(f"Computing {quantity_name} (nbsatellite={nbsatellite})...")
     
+    # ===== CAS GRADIENT/DIVERGENCE =====
+    if quantity_name in GRADIENT_QUANTITIES:
+        if nbsatellite < 4:
+            raise ValueError(f"{quantity_name} nécessite nbsatellite >= 4")
+        
+        base_quantity = quantity_name.replace('div', '').lstrip('I').replace('grad', '')
+        
+        if 'div' in quantity_name:
+            result = compute_divergence_stub(base_quantity, dic_quant, separation)
+        else:
+            result = compute_gradient_stub(quantity_name, dic_quant, separation)
+        
+        return result
+    
+    # ===== CAS QUANTITÉ NORMALE =====
     if quantity_name not in QUANTITIES:
         raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
-    
-    quantity_obj = QUANTITIES[quantity_name]
     
     class MockFile:
         def __init__(self):
@@ -192,145 +291,166 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, verbos
         def create_dataset(self, name, data=None, **kwargs):
             self.data[name] = data if data is not None else np.empty(0)
     
-    mock_file = MockFile()
+    # Cas nbsatellite = 1
+    if nbsatellite == 1:
+        mock_file = MockFile()
+        try:
+            QUANTITIES[quantity_name].create_datasets(mock_file, dic_quant, dic_param)
+        except Exception as e:
+            if verbose:
+                logger.error(f"Failed to compute {quantity_name}: {e}")
+            raise
+        
+        result = list(mock_file.data.values())[0] if len(mock_file.data) == 1 else mock_file.data
     
-    try:
-        quantity_obj.create_datasets(mock_file, dic_quant, dic_param)
-    except Exception as e:
-        if verbose:
-            logger.error(f"Failed to compute {quantity_name}: {e}")
-        raise
-    
-    if len(mock_file.data) == 1:
-        result = list(mock_file.data.values())[0]
+    # Cas nbsatellite > 1 : calculer pour chaque satellite
     else:
-        result = mock_file.data
+        result = {}
+        for sat_name in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
+            # Extraire les données pour ce satellite
+            dic_quant_sat = {}
+            dic_param_sat = {}
+            for key, value in dic_quant.items():
+                dic_quant_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
+            for key, value in dic_param.items():
+                dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
+
+            # Calculer la quantité
+            mock_file = MockFile()
+            try:
+                QUANTITIES[quantity_name].create_datasets(mock_file, dic_quant_sat, dic_param)
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Failed to compute {quantity_name} for {sat_name}: {e}")
+                raise
+            
+            result[sat_name] = list(mock_file.data.values())[0] if len(mock_file.data) == 1 else mock_file.data
     
     if verbose:
         logger.info(f"Quantity {quantity_name} computed")
     
     return result
 
-
-def compute_all_available_quantities(dic_quant, dic_param, required_quantities=None, verbose=False):
+def compute_all_available_quantities(dic_quant, dic_param, available_quantities=None, 
+                                     nbsatellite=1, separation=1.0, verbose=False):
     """
     Calcule TOUTES les quantités disponibles en fonction des données et des exigences.
-    
-    Paramètres:
-    -----------
-    dic_quant : dict
-        Dictionnaire des données 1D
-    dic_param : dict
-        Paramètres de simulation
-    required_quantities : set or list
-        Quantités requises (si None, calcule toutes les possibles)
-    verbose : bool
-    
-    Retour:
-    -------
-    dict : Dictionnaire de toutes les quantités calculées
+    Traite séparément les cas nbsatellite=1 et nbsatellite=4.
     """
     
-    if required_quantities is None:
-        required_quantities = set(QUANTITY_DEPENDENCIES.keys())
+    if available_quantities is None:
+        available_quantities = set(QUANTITY_DEPENDENCIES.keys())
     else:
-        required_quantities = set(required_quantities)
-    
-    # Filter to computable quantities
-    available_quantities = get_available_quantities_for_requirements(dic_quant, required_quantities)
-    
-    if verbose:
-        logger.info(f"Computing {len(available_quantities)} quantities")
-        logger.info(f"Required: {required_quantities}")
-        logger.info(f"Available to compute: {available_quantities}")
+        available_quantities = set(available_quantities)
     
     result = dic_quant.copy()
     
-    for quantity_name in available_quantities:
-        # Skip if already computed or is raw data
-        if quantity_name in result:
-            continue
-        
-        try:
-            computed = compute_quantity_from_QUANTITIES(
-                quantity_name, result, dic_param, verbose
-            )
+    if nbsatellite == 1:
+        # ===== CAS nbsatellite=1 : pas de gradients =====
+        for quantity_name in available_quantities:
+            if quantity_name in result or quantity_name in GRADIENT_QUANTITIES:
+                continue
             
-            if isinstance(computed, dict):
-                result.update(computed)
-            else:
-                result[quantity_name] = computed
-        except Exception as e:
-            if verbose:
-                logger.error(f"Failed to compute {quantity_name}: {str(e)}")
+            try:
+                computed = compute_quantity_from_QUANTITIES(
+                    quantity_name, result, dic_param, nbsatellite=1, verbose=verbose
+                )
+                if isinstance(computed, dict):
+                    result.update(computed)
+                else:
+                    result[quantity_name] = computed
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Failed to compute {quantity_name}: {e}")
+    
+    elif nbsatellite == 4:
+        # ===== CAS nbsatellite=4 : avec gradients =====
+        # Étape 1 : quantités normales
+        for quantity_name in available_quantities:
+            if quantity_name in result or quantity_name in GRADIENT_QUANTITIES:
+                continue
+            
+            try:
+                computed = compute_quantity_from_QUANTITIES(
+                    quantity_name, result, dic_param, nbsatellite=4, separation=separation, 
+                    verbose=verbose
+                )
+                if isinstance(computed, dict):
+                    result.update(computed)
+                else:
+                    result[quantity_name] = computed
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Failed to compute {quantity_name}: {e}")
+        
+        # Étape 2 : gradients et divergences
+        for quantity_name in available_quantities:
+            if quantity_name in result or quantity_name not in GRADIENT_QUANTITIES:
+                continue
+            
+            try:
+                computed = compute_quantity_from_QUANTITIES(
+                    quantity_name, result, dic_param, nbsatellite=4, separation=separation, 
+                    verbose=verbose
+                )
+                if isinstance(computed, dict):
+                    result.update(computed)
+                else:
+                    result[quantity_name] = computed
+            except Exception as e:
+                if verbose:
+                    logger.error(f"Failed to compute {quantity_name}: {e}")
+    
+    else:
+        raise ValueError(f"nbsatellite doit être 1 ou 4, reçu: {nbsatellite}")
     
     return result
 
 
 def extract_trajectory_and_compute(dic_quant, y_pos, z_pos, dic_param=None, 
                                    laws=None, terms=None, quantities=None,
-                                   verbose=False):
+                                   nbsatellite=1, separation=1.0, verbose=False):
     """
     Extrait une trajectoire 1D et calcule les quantités requises pour les lois/termes.
     
     Paramètres:
     -----------
     dic_quant : dict
-        Dictionnaire des données 3D
-    y_pos : int
-        Position y de la trajectoire
-    z_pos : int
-        Position z de la trajectoire
+        Dictionnaire des données 1D (trajectoire simple ou multi-satellites)
+    y_pos, z_pos : int
+        Pour compatibilité (non utilisés si nbsatellite=4)
     dic_param : dict
-        Paramètres (optionnels)
-    laws : list[str]
-        Lois à calculer
-    terms : list[str]
-        Termes à calculer
-    quantities : list[str]
-        Quantités additionnelles
+        Paramètres
+    laws, terms, quantities : list
+        Configurations
+    nbsatellite : int
+        Nombre de satellites
+    separation : float
+        Séparation entre les satellites pour gradients
     verbose : bool
-    
-    Retour:
-    -------
-    dict : Quantités 1D calculées le long de la trajectoire
     """
     
     if dic_param is None:
         dic_param = {}
     
-    # Extract 1D trajectory
-    trajectory_data = {}
-    
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            trajectory_data[key] = dic_quant[key][:, y_pos, z_pos]
-        else:
-            trajectory_data[key] = dic_quant[key]
-    
-    # Add means if available
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            if key == "ppar":
-                trajectory_data["meanppar"] = np.mean(dic_quant[key])
-            elif key == "pperp":
-                trajectory_data["meanpperp"] = np.mean(dic_quant[key])
+    # Les données sont déjà extraites (1D ou multi-satellites)
+    trajectory_data = dic_quant.copy()
     
     if verbose:
-        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
-        array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
-        if array_keys:
-            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
+        logger.info(f"Nbsatellite: {nbsatellite}")
+        logger.info(f"Separation: {separation}")
     
     # Determine required quantities
-    required_qty = list_required_quantities(laws, terms, quantities)
-    
+    available_quantities = list_computable_quantities(
+        trajectory_data, laws, terms, quantities, nbsatellite=nbsatellite
+)    
     if verbose:
-        logger.info(f"Required quantities from laws/terms: {required_qty}")
+        logger.info(f"Required quantities from laws/terms: {available_quantities}")
     
     # Compute all available quantities
     return compute_all_available_quantities(
-        trajectory_data, dic_param, required_qty, verbose
+        trajectory_data, dic_param, available_quantities, nbsatellite=nbsatellite,
+        separation=separation, verbose=verbose
     )
 
 
@@ -342,7 +462,10 @@ def display_results(traj_quantities, title="Results along trajectory"):
     logger.info("-" * 70)
     for key in sorted(traj_quantities.keys()):
         value = traj_quantities[key]
-        if isinstance(value, np.ndarray) and value.ndim == 1:
-            logger.info(f"  {key:20s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
+        if isinstance(value, np.ndarray):
+            if value.ndim == 1:
+                logger.info(f"  {key:20s}: shape={value.shape} | min={value.min():12.6e} | max={value.max():12.6e}")
+            elif value.ndim == 2:
+                logger.info(f"  {key:20s}: shape={value.shape} | min={value.min():12.6e} | max={value.max():12.6e}")
         elif isinstance(value, (int, float, np.number)):
             logger.info(f"  {key:20s}: {value:15.6e}")

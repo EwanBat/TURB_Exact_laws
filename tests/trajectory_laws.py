@@ -8,8 +8,6 @@ Pour les divergences, utilise un facteur commun par loi au lieu de calculer rée
 import numpy as np
 import logging
 from exact_laws.el_calc_mod.laws import LAWS
-from exact_laws.el_calc_mod.terms import TERMS
-from trajectory_terms import compute_all_terms_for_laws
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +59,15 @@ def get_divergence_factor_for_law(law_name):
     return DIVERGENCE_REPLACEMENT_FACTORS.get(law_name, 1.0)
 
 
-def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, verbose=False):
+def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_name, dic_param, trajectory=None, verbose=False):
     """
     Applique SEULEMENT le facteur de divergence aux termes.
     Les coefficients propres de la loi ne sont pas appliqués ici.
     
     Paramètres:
     -----------
+    dic_quantities : dict
+        Dictionnaire des quantités de base calculées
     dic_terms : dict
         Dictionnaire des termes calculés
     law_obj : AbstractLaw
@@ -76,6 +76,8 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
         Nom de la loi
     dic_param : dict
         Paramètres de simulation
+    trajectory : np.ndarray, optional
+        Trajectoire le long de laquelle les lois sont calculées
     verbose : bool
     
     Retour:
@@ -118,7 +120,7 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
             if base_term in dic_terms:
                 term_value = dic_terms[base_term]
                 # Appliquer le facteur de divergence (pas le coefficient)
-                result[coeff_key] = div_factor * np.sum(term_value, axis=0)
+                result[coeff_key] = div_factor * np.linalg.norm(term_value * np.transpose(trajectory),axis=0) / np.linalg.norm(trajectory,axis=1)
                 applied_terms.append(coeff_key)
                 if verbose and is_flux_term:
                     logger.info(f"{coeff_key} (flux): div_factor={div_factor:.4f} applied")
@@ -176,7 +178,12 @@ def apply_law_coefficients_and_factors(dic_terms, law_obj, law_name, dic_param, 
     return result, coeffs  # ← Retourner aussi les coefficients originaux
 
 
-def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbose=False):
+def apply_law_coefficients_4satellites(dic_quantities, dic_terms, law_obj, law_name, dic_param, verbose=False):
+    # Work in progress: similar to 1 satellite but with handling for 4 satellites
+
+    return None
+
+def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, laws=None, nbsatellite=1, trajectory=None, verbose=False):
     """
     Calcule les termes des lois avec coefficients appliqués.
     Retourne un dictionnaire plat des termes de lois (div_flux_*, source_*, etc.).
@@ -187,6 +194,8 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
     
     Paramètres:
     -----------
+    dic_quantities : dict
+        Dictionnaire des quantités de base calculées
     dic_terms : dict
         Dictionnaire des termes de base calculés
     dic_param : dict
@@ -203,11 +212,7 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
     if laws is None:
         laws = []
     
-    # Ajouter rho_mean aux paramètres si absent
-    if "rho_mean" not in dic_param:
-        dic_param["rho_mean"] = 1.0
-    
-    result = {}
+    dic_law_terms = {}
     dic_coefficients = {}
     
     # Calculer les termes une seule fois (ils sont identiques pour toutes les lois)
@@ -225,13 +230,30 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
             law_obj = LAWS[law_name]
             
             # Appliquer les coefficients et facteurs de divergence
-            law_terms_dict, law_coeffs = apply_law_coefficients_and_factors(
-                dic_terms, law_obj, law_name, dic_param, verbose=verbose
-            )
+            if nbsatellite == 1:
+                law_terms, law_coeffs = apply_law_coefficients_1satellite(
+                    dic_quantities,
+                    dic_terms, 
+                    law_obj, 
+                    law_name, 
+                    dic_param, 
+                    trajectory=trajectory,
+                    verbose=verbose
+                )
             
+            elif nbsatellite == 4:
+                law_terms, law_coeffs = apply_law_coefficients_4satellites(
+                    dic_quantities,
+                    dic_terms,
+                    law_obj,
+                    law_name,
+                    dic_param,
+                    verbose=verbose
+                )
+
             # Pour la première loi, stocker les termes (ils seront identiques pour les autres)
             if not computed:
-                result = law_terms_dict
+                dic_law_terms.update(law_terms)
                 computed = True
             
             # Ajouter les coefficients avec clés formatées
@@ -239,80 +261,12 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, verbos
                 dic_coefficients[f"{law_name}_{term_key}"] = coeff_value
             
             if verbose:
-                logger.info(f"Added {len(law_terms_dict)} terms for {law_name}")
+                logger.info(f"Added {len(law_terms)} terms for {law_name}")
         
         except Exception as e:
             logger.error(f"Failed to process {law_name}: {e}")
     
-    return result, dic_coefficients
-
-
-def extract_trajectory_and_compute_law_terms(dic_quant, y_pos, z_pos, dic_param=None, 
-                                            laws=None, verbose=False):
-    """
-    Extrait une trajectoire 1D et calcule les termes des lois.
-    
-    Paramètres:
-    -----------
-    dic_quant : dict
-        Dictionnaire des données 3D
-    y_pos : int
-        Position y de la trajectoire
-    z_pos : int
-        Position z de la trajectoire
-    dic_param : dict
-        Paramètres (optionnels)
-    laws : list[str]
-        Lois à calculer (terme utilisé pour récupérer les coefficients)
-    verbose : bool
-    
-    Retour:
-    -------
-    tuple : (dic_terms, dic_law_terms, dic_coefficients)
-        - dic_terms: dictionnaire des termes de base
-        - dic_law_terms: dictionnaire plat des termes de lois avec coefficients {terme: array}
-        - dic_coefficients: dictionnaire des coefficients de loi {loi_terme: coeff}
-    """
-    
-    if dic_param is None:
-        dic_param = {}
-    
-    if laws is None:
-        laws = []
-    
-    # Extract 1D trajectory
-    trajectory_data = {}
-    
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            trajectory_data[key] = dic_quant[key][:, y_pos, z_pos]
-        else:
-            trajectory_data[key] = dic_quant[key]
-    
-    # Add means if available
-    for key in dic_quant.keys():
-        if isinstance(dic_quant[key], np.ndarray) and dic_quant[key].ndim == 3:
-            if key == "ppar":
-                dic_param["meanppar"] = np.mean(dic_quant[key])
-            elif key == "pperp":
-                dic_param["meanpperp"] = np.mean(dic_quant[key])
-            elif key == "rho":
-                dic_param["rho_mean"] = np.mean(dic_quant[key])
-    
-    if verbose:
-        logger.info(f"Trajectory at (y={y_pos}, z={z_pos})")
-        array_keys = [k for k in trajectory_data.keys() if isinstance(trajectory_data[k], np.ndarray)]
-        if array_keys:
-            logger.info(f"Data shape: {trajectory_data[array_keys[0]].shape}")
-    
-    # Compute all terms for laws
-    dic_terms = compute_all_terms_for_laws(trajectory_data, dic_param, laws, verbose)
-    
-    # Compute law terms with coefficients
-    dic_law_terms, dic_coefficients = compute_laws_terms_with_coefficients(dic_terms, dic_param, laws, verbose)
-    
-    return dic_terms, dic_law_terms, dic_coefficients  # ← 3e retour
-
+    return dic_law_terms, dic_coefficients
 
 def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
     """
