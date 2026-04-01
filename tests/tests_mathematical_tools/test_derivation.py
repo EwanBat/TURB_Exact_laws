@@ -31,7 +31,7 @@ class TestCdiff:
         fx = np.sin(x)
         cdiff_on_fx = cdiff(fx, length_case=x[1], period=False, precision=4)
         dfx = np.cos(x)
-        precision = x[1] * x[1]  # calcul des bord avec une précision de 2
+        precision = x[1] * x[1]  # Calculation of edge with precision of 2
         assert np.max(np.abs(cdiff_on_fx - dfx)) < precision, f"error on the derivative of a sin"
 
     def test_sin1D_periodic_pres2_point(self):

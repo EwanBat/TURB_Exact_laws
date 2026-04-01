@@ -4,9 +4,12 @@ import logging
 from datetime import datetime
 from trajectory_preprocess import preprocess_trajectory_from_ini, trajectory_linear_x
 from trajectory_quantities import extract_trajectory_and_compute
+from trajectory_terms import compute_all_terms_for_laws
+from trajectory_laws import compute_laws_terms_with_coefficients
 import matplotlib.pyplot as plt
 import matplotlib.scale as mscale
-
+from matplotlib.gridspec import GridSpec
+import time
 
 # Configure logging with a better format
 log_filename = f"test_1satellite_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
@@ -25,6 +28,7 @@ logging.info("\n" + "="*70)
 logging.info("PREPROCESSING TRAJECTORY")
 logging.info("="*70)
 
+time_start = time.time()
 results = preprocess_trajectory_from_ini(
     ini_file=config_file,
     trajectory_func=trajectory_linear_x,
@@ -34,7 +38,7 @@ results = preprocess_trajectory_from_ini(
 
 # Extract results
 config = results['config']
-dic_datas = results['dic_datas']  # Données 1D extraites
+dic_datas = results['dic_datas']  # 1D extracted data
 dic_param = results['dic_param']
 trajectory = results['trajectory']
 
@@ -46,7 +50,6 @@ nbsatellite = config['nbsatellite']
 
 dic_quantities = extract_trajectory_and_compute(
     results['dic_datas'], 
-    y_pos=100, z_pos=100,
     dic_param=results['dic_param'],
     laws=laws,
     nbsatellite=results['config']['nbsatellite'],
@@ -56,7 +59,6 @@ dic_quantities = extract_trajectory_and_compute(
 
 # %% Compute quantities along trajectory
 if results['config']['nbsatellite'] == 1:
-    from trajectory_terms import compute_all_terms_for_laws
 
     dic_terms = compute_all_terms_for_laws(
         dic_quantities = dic_quantities, 
@@ -66,7 +68,6 @@ if results['config']['nbsatellite'] == 1:
         verbose=True)
 
 
-    from trajectory_laws import compute_laws_terms_with_coefficients
 
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_quantities=dic_quantities,
@@ -76,7 +77,10 @@ if results['config']['nbsatellite'] == 1:
         nbsatellite=results['config']['nbsatellite'],
         trajectory=trajectory,
         verbose=True
-    )  
+    ) 
+    time_end = time.time()
+    logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
+
 
     def linear_op_from_list_term(coeffs, quantities, list_term):
         coeff = {k.split('_', 1)[1]: coeffs[k] for k in coeffs if k in list_term}
@@ -105,5 +109,24 @@ if results['config']['nbsatellite'] == 1:
     plt.savefig("PP98_trajectory.png")
 
 elif results['config']['nbsatellite'] == 4:
-    print(dic_quantities.keys())
-    print(dic_quantities['vx'].keys())
+
+    dic_terms = compute_all_terms_for_laws(
+        dic_quantities = dic_quantities, 
+        dic_param=results['dic_param'], 
+        laws=laws, 
+        nbsatellite=results['config']['nbsatellite'],
+        verbose=True)
+    
+    fig = plt.figure(figsize=(8, 6))
+    gs = GridSpec(2, 2, figure=fig)
+    for sat in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
+        ax = fig.add_subplot(gs[int(sat.split('_')[1])//2, int(sat.split('_')[1])%2])
+        for term in dic_terms.keys():
+            ax.plot(dic_param['lx'], dic_terms[term][sat], label=term)
+        ax.set_xlabel('lx [di]')
+        ax.set_ylabel(r'$epsilon_{PP98}$')
+        ax.set_title(f"{sat} - Cut at y=100, z=100")
+        ax.legend()
+            
+    plt.tight_layout()
+    plt.savefig("terms_trajectory_4sat.png")

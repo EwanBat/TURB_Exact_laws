@@ -1,8 +1,8 @@
 # trajectory_terms.py
 """
-Module pour calculer les termes le long d'une trajectoire.
-Analogue à trajectory_quantities.py mais pour les termes.
-Utilise les méthodes calc_fourier() des termes pour les trajectoires.
+Module to compute terms along a trajectory.
+Analog to trajectory_quantities.py but for terms.
+Uses calc_fourier() methods from terms for trajectories.
 """
 
 import numpy as np
@@ -14,9 +14,9 @@ from trajectory_quantities import list_computable_quantities
 logger = logging.getLogger(__name__)
 
 
-# Mapping des variables abstraites vers leurs composantes concrètes
+# Mapping of abstract variables to their concrete components
 VARIABLE_COMPONENTS = {
-    # === Données brutes ===
+    # === Raw data ===
     'v': ['vx', 'vy', 'vz'],
     'Iv': ['Ivx', 'Ivy', 'Ivz'],
     'b': ['bx', 'by', 'bz'],
@@ -29,55 +29,55 @@ VARIABLE_COMPONENTS = {
     # === Scalaires directs ===
     'rho': ['rho'],
     'Irho': ['Irho'],
-    'pm': ['pm'],  # Pression magnétique
-    'Ipm': ['Ipm'],  # Pression magnétique incompressible
-    'pgyr': ['pgyr'],  # Pression gyrotropique
-    'Ipgyr': ['Ipgyr'],  # Pression gyrotropique incompressible
-    'piso': ['piso'],  # Pression isotrope
-    'Ipiso': ['Ipiso'],  # Pression isotrope incompressible
-    'ppol': ['ppol'],  # Pression poloïdale
-    'Ippol': ['Ippol'],  # Pression poloïdale incompressible
-    'pcgl': ['pcgl'],  # Pression CGL
-    'Ipcgl': ['Ipcgl'],  # Pression CGL incompressible
-    'ugyr': ['ugyr'],  # Vitesse gyrotropique
-    'Iugyr': ['Iugyr'],  # Vitesse gyrotropique incompressible
-    'uiso': ['uiso'],  # Vitesse isotrope
-    'Iuiso': ['Iuiso'],  # Vitesse isotrope incompressible
-    'upol': ['upol'],  # Vitesse poloïdale
-    'Iupol': ['Iupol'],  # Vitesse poloïdale incompressible
-    'ucgl': ['ucgl'],  # Vitesse CGL
-    'Iucgl': ['Iucgl'],  # Vitesse CGL incompressible
+    'pm': ['pm'],  # Magnetic pressure
+    'Ipm': ['Ipm'],  # Incompressible magnetic pressure
+    'pgyr': ['pgyr'],  # Gyrotropic pressure
+    'Ipgyr': ['Ipgyr'],  # Incompressible gyrotropic pressure
+    'piso': ['piso'],  # Isotropic pressure
+    'Ipiso': ['Ipiso'],  # Incompressible isotropic pressure
+    'ppol': ['ppol'],  # Poloidal pressure
+    'Ippol': ['Ippol'],  # Incompressible poloidal pressure
+    'pcgl': ['pcgl'],  # CGL pressure
+    'Ipcgl': ['Ipcgl'],  # Incompressible CGL pressure
+    'ugyr': ['ugyr'],  # Gyrotropic velocity
+    'Iugyr': ['Iugyr'],  # Incompressible gyrotropic velocity
+    'uiso': ['uiso'],  # Isotropic velocity
+    'Iuiso': ['Iuiso'],  # Incompressible isotropic velocity
+    'upol': ['upol'],  # Poloidal velocity
+    'Iupol': ['Iupol'],  # Incompressible poloidal velocity
+    'ucgl': ['ucgl'],  # CGL velocity
+    'Iucgl': ['Iucgl'],  # Incompressible CGL velocity
     
     # === Divergences ===
-    'divv': ['divvx', 'divvy', 'divvz'],  # Divergence de vitesse
-    'divb': ['divbx', 'divby', 'divbz'],  # Divergence du champ magnétique
-    'divj': ['divjx', 'divjy', 'divjz'],  # Divergence du courant
+    'divv': ['divvx', 'divvy', 'divvz'],  # Velocity divergence
+    'divb': ['divbx', 'divby', 'divbz'],  # Magnetic field divergence
+    'divj': ['divjx', 'divjy', 'divjz'],  # Current divergence
     
     # === Gradients ===
-    'gradrho': ['dxrho', 'dyrho', 'dzrho'],  # Gradient de densité
-    'gradv': ['grad_v_x', 'grad_v_y', 'grad_v_z'],  # Gradient de vitesse
-    'graduiso': ['grad_uiso_x', 'grad_uiso_y', 'grad_uiso_z'],  # Gradient vitesse isotrope
-    'gradupol': ['grad_upol_x', 'grad_upol_y', 'grad_upol_z'],  # Gradient vitesse poloïdale
+    'gradrho': ['dxrho', 'dyrho', 'dzrho'],  # Density gradient
+    'gradv': ['grad_v_x', 'grad_v_y', 'grad_v_z'],  # Velocity gradient
+    'graduiso': ['grad_uiso_x', 'grad_uiso_y', 'grad_uiso_z'],  # Isotropic velocity gradient
+    'gradupol': ['grad_upol_x', 'grad_upol_y', 'grad_upol_z'],  # Poloidal velocity gradient
     
     # === Hyperdissipation ===
-    'hdk': ['hdkx', 'hdky', 'hdkz'],  # Hyperdissipation cinétique
-    'hdm': ['hdmx', 'hdmy', 'hdmz'],  # Hyperdissipation magnétique
-    'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],  # Hyperdissipation cinétique ordre 2
+    'hdk': ['hdkx', 'hdky', 'hdkz'],  # Kinetic hyperdissipation
+    'hdm': ['hdmx', 'hdmy', 'hdmz'],  # Magnetic hyperdissipation
+    'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],  # Kinetic hyperdissipation order 2
 }
 
 
-def list_required_terms(laws=None):
+def list_required_terms(laws=None, dic_param=None):
     """
-    Retourne la liste des termes requis pour calculer les lois données.
+    Returns the list of required terms to compute the given laws.
     
-    Paramètres:
+    Parameters:
     -----------
     laws : list[str]
-        Liste des noms des lois
+        List of law names
     
-    Retour:
+    Returns:
     -------
-    set : Ensemble des termes requis
+    set : Set of required terms
     """
     if laws is None:
         laws = []
@@ -89,9 +89,9 @@ def list_required_terms(laws=None):
         for law_name in laws:
             if law_name in LAWS:
                 law_obj = LAWS[law_name]
-                # terms_and_coeffs() retourne (terms_list, coeffs_dict)
-                # On passe des paramètres vides pour cette étape
-                law_terms, _ = law_obj.terms_and_coeffs({"rho_mean": 1.0})
+                # terms_and_coeffs() returns (terms_list, coeffs_dict)
+                # Pass empty parameters for this step
+                law_terms, _ = law_obj.terms_and_coeffs(dic_param)
                 terms.update(law_terms)
     
     return terms
@@ -99,18 +99,18 @@ def list_required_terms(laws=None):
 
 def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     """
-    Convertit les variables abstraites en composantes concrètes.
+    Convert abstract variables to concrete components.
     
-    Paramètres:
+    Parameters:
     -----------
     abstract_vars : list[str]
-        Liste des variables abstraites (ex: ['v', 'b'])
+        List of abstract variables (ex: ['v', 'b'])
     dic_quant : dict
-        Dictionnaire contenant les données
+        Dictionary containing the data
     
-    Retour:
+    Returns:
     -------
-    list : Liste de np.ndarray correspondant aux variables concrètes
+    list : List of np.ndarray corresponding to concrete variables
     """
     concrete_data = []
     
@@ -122,7 +122,7 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
                     raise ValueError(f"Component '{comp}' (from variable '{var}') not found in data")
                 concrete_data.append(dic_quant[comp])
         else:
-            # Variable qui n'est pas dans le mapping, la chercher directement
+            # Variable not in mapping, search directly
             if var not in dic_quant:
                 raise ValueError(f"Variable '{var}' not found in data and not in VARIABLE_COMPONENTS mapping")
             concrete_data.append(dic_quant[var])
@@ -132,22 +132,22 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
 
 def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verbose=False):
     """
-    Calcule un terme en utilisant la méthode calc_fourier de TERMS.
-    Adapté pour les données 1D de trajectoires.
+    Compute a term using the calc_fourier method from TERMS.
+    Adapted for 1D trajectory data.
     
-    Paramètres:
+    Parameters:
     -----------
     term_name : str
-        Nom du terme (ex: "flux_dvdvdv", "bg17_vwv")
+        Name of the term (ex: "flux_dvdvdv", "bg17_vwv")
     dic_quant : dict
-        Dictionnaire des données 1D (trajectoire) avec quantités calculées
+        Dictionary of 1D data (trajectory) with computed quantities
     dic_param : dict
-        Paramètres de simulation
+        Simulation parameters
     verbose : bool
     
-    Retour:
+    Returns:
     -------
-    np.ndarray : Valeur du terme calculée (toujours un array)
+    np.ndarray : Value of the computed term (always an array)
     """
     
     if verbose:
@@ -159,18 +159,21 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
     term_obj = TERMS[term_name]
     
     try:
-        # Récupérer les variables abstraites requises par le terme
+        # Get abstract variables required by the term
         abstract_vars = term_obj.variables()
         
         if nbsatellite == 1:
-            # Convertir en composantes concrètes
+            # Convert to concrete components
             args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
 
-            # Appeler calc_fourier pour les données 1D
+            # Call calc_fourier for 1D data
             result = term_obj.calc_fourier(*args, dic_param=dic_param)
+            if type(result) != np.ndarray:
+                result = np.array(result)
         elif nbsatellite == 4:
+            result = {}
             for sat_name in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
-                # Extraire les données pour ce satellite
+                # Extract data for this satellite
                 dic_quant_sat = {}
                 dic_param_sat = {}
                 for key, value in dic_quant.items():
@@ -178,24 +181,16 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
                 for key, value in dic_param.items():
                     dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
                 
-                # Convertir les variables abstraites en composantes concrètes pour ce satellite
+                # Convert abstract variables to concrete components for this satellite
                 args_sat = get_concrete_variables_from_abstract(abstract_vars, dic_quant_sat)
                 
-                # Calculer le terme pour ce satellite
+                # Compute term for this satellite
                 result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat)
-                
-                # Stocker le résultat dans un dictionnaire par satellite
-                if 'result' not in locals():
-                    result = {}
+                if type(result_sat) != np.ndarray:
+                    result_sat = np.array(result_sat)
                 result[sat_name] = result_sat
         else:
             raise ValueError(f"Unsupported number of satellites: {nbsatellite}")
-        
-        # Convertir le résultat en array numpy
-        if isinstance(result, list):
-            result = np.array(result)
-        elif not isinstance(result, np.ndarray):
-            result = np.array([result])
         
     except Exception as e:
         if verbose:
@@ -210,31 +205,31 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
 
 def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=None, nbsatellite=1, verbose=False):
     """
-    Calcule tous les termes requis pour les lois données.
-    Les quantités dérivées sont calculées automatiquement avant les termes.
+    Compute all terms required for the given laws.
+    Derived quantities are computed automatically before terms.
     
-    Paramètres:
+    Parameters:
     -----------
     dic_quant : dict
-        Dictionnaire des données 1D ou 3D
+        Dictionary of 1D or 3D data
     dic_param : dict
-        Paramètres de simulation
+        Simulation parameters
     laws : list[str]
-        Liste des lois
+        List of laws
     nbsatellite : int
-        Nombre de satellites
+        Number of satellites
     verbose : bool
     
-    Retour:
+    Returns:
     -------
-    dict : Dictionnaire des termes calculés
+    dict : Dictionary of computed terms
     """
     
     if laws is None:
         laws = []
     
     # Get required terms
-    required_terms = list_required_terms(laws)
+    required_terms = list_required_terms(laws, dic_param=dic_param)
     
     if verbose:
         logger.info(f"Computing {len(required_terms)} terms")
@@ -259,14 +254,14 @@ def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=Non
 
 def display_results(dic_terms, title="Results along trajectory"):
     """
-    Affiche les résultats des termes le long d'une trajectoire.
+    Display results of terms along a trajectory.
     
-    Paramètres:
+    Parameters:
     -----------
     dic_terms : dict
-        Dictionnaire des termes
+        Dictionary of terms
     title : str
-        Titre de l'affichage
+        Display title
     """
     logger.info(f"\n{title}")
     logger.info("-" * 70)

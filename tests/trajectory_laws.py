@@ -1,8 +1,8 @@
 # trajectory_laws.py
 """
-Module pour calculer les termes des lois le long d'une trajectoire.
-Utilise les termes calculés par trajectory_terms.py directement.
-Pour les divergences, utilise un facteur commun par loi au lieu de calculer réellement.
+Module to compute law terms along a trajectory.
+Uses terms computed by trajectory_terms.py directly.
+For divergences, uses a common factor per law instead of computing it explicitly.
 """
 
 import numpy as np
@@ -12,10 +12,10 @@ from exact_laws.el_calc_mod.laws import LAWS
 logger = logging.getLogger(__name__)
 
 
-# Facteurs de remplacement pour les divergences
-# Un facteur unique par loi qui s'applique à TOUS les termes avec divergence de cette loi
+# Divergence replacement factors
+# A unique factor per law that applies to ALL divergence terms of that law
 # Format: {'law_name': factor}
-# Pour le moment, tous les facteurs sont à 1
+# For now, all factors are set to 1
 DIVERGENCE_REPLACEMENT_FACTORS = {
     'PP98': 1.0,
     'BG17': 1.0,
@@ -44,57 +44,57 @@ DIVERGENCE_REPLACEMENT_FACTORS = {
 
 def get_divergence_factor_for_law(law_name):
     """
-    Retourne le facteur de remplacement de divergence pour une loi donnée.
-    Ce facteur s'applique à TOUS les termes avec divergence de cette loi.
+    Returns the divergence replacement factor for a given law.
+    This factor applies to ALL divergence terms of that law.
     
-    Paramètres:
+    Parameters:
     -----------
     law_name : str
-        Nom de la loi
+        Name of the law
     
-    Retour:
+    Returns:
     -------
-    float : Facteur de divergence (par défaut 1.0)
+    float : Divergence factor (default 1.0)
     """
     return DIVERGENCE_REPLACEMENT_FACTORS.get(law_name, 1.0)
 
 
 def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_name, dic_param, trajectory=None, verbose=False):
     """
-    Applique SEULEMENT le facteur de divergence aux termes.
-    Les coefficients propres de la loi ne sont pas appliqués ici.
+    Apply ONLY the divergence factor to the terms.
+    Law-specific coefficients are not applied here.
     
-    Paramètres:
+    Parameters:
     -----------
     dic_quantities : dict
-        Dictionnaire des quantités de base calculées
+        Dictionary of computed base quantities
     dic_terms : dict
-        Dictionnaire des termes calculés
+        Dictionary of computed terms
     law_obj : AbstractLaw
-        Objet de la loi
+        Law object
     law_name : str
-        Nom de la loi
+        Name of the law
     dic_param : dict
-        Paramètres de simulation
+        Simulation parameters
     trajectory : np.ndarray, optional
-        Trajectoire le long de laquelle les lois sont calculées
+        Trajectory along which laws are computed
     verbose : bool
     
-    Retour:
+    Returns:
     -------
-    dict : Dictionnaire des termes de loi avec facteur de divergence appliqué
+    dict : Dictionary of law terms with divergence factor applied
     """
     
     law_terms, coeffs = law_obj.terms_and_coeffs(dic_param)
     result = {}
     
-    # Récupérer le facteur de divergence commun pour cette loi
+    # Get the common divergence factor for this law
     div_factor = get_divergence_factor_for_law(law_name)
     
-    # Récupérer la liste des termes flux de la loi (ceux qui auront une divergence)
+    # Get the list of flux terms of the law (those that will have a divergence)
     law_flux_terms = set(law_obj.terms) if hasattr(law_obj, 'terms') else set()
     
-    # Déterminer la taille des arrays (à partir du premier terme calculé)
+    # Determine array size (from first computed term)
     array_size = None
     for term_value in dic_terms.values():
         if isinstance(term_value, np.ndarray):
@@ -105,21 +105,21 @@ def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_na
     applied_terms = []
     
     for coeff_key, coeff_value in coeffs.items():
-        # Déterminer si c'est un terme de divergence
+        # Determine if it's a divergence term
         is_divergence_term = coeff_key.startswith('div_')
         is_source_term = coeff_key.startswith('source_')
         
-        # Chercher le terme correspondant
+        # Find the corresponding term
         if is_divergence_term:
-            # Pour les divergences: div_flux_X → flux_X
+            # For divergences: div_flux_X → flux_X
             base_term = coeff_key.replace('div_', '')
             
-            # Vérifier si c'est un terme flux (listés dans law_obj.terms)
+            # Check if it's a flux term (listed in law_obj.terms)
             is_flux_term = base_term in law_flux_terms
             
             if base_term in dic_terms:
                 term_value = dic_terms[base_term]
-                # Appliquer le facteur de divergence (pas le coefficient)
+                # Apply the divergence factor (not the coefficient)
                 result[coeff_key] = div_factor * np.linalg.norm(term_value * np.transpose(trajectory),axis=0) / np.linalg.norm(trajectory,axis=1)
                 applied_terms.append(coeff_key)
                 if verbose and is_flux_term:
@@ -128,26 +128,26 @@ def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_na
                 incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
         
         elif is_source_term:
-            # Termes sources
-            # Pour les source: vérifier si c'est un gradient ou une divergence
+            # Source terms
+            # For sources: check if it's a gradient or divergence
             has_gradient = any(keyword in coeff_key for keyword in ['drdr', 'dr2', 'dx', 'dy', 'dz'])
             
             if has_gradient:
-                # Terme source avec gradient/divergence: remplacer par array facteur
+                # Source term with gradient/divergence: replace with factor array
                 if array_size is not None:
-                    # Créer un array de la même taille rempli avec le facteur
+                    # Create an array of same size filled with the factor
                     result[coeff_key] = np.full(array_size, div_factor)
                 else:
-                    # Fallback: créer un scalaire
+                    # Fallback: create a scalar
                     result[coeff_key] = div_factor
                 applied_terms.append(coeff_key)
                 if verbose:
                     logger.info(f"{coeff_key} (source+grad): div_factor={div_factor:.4f} applied")
             else:
-                # Source normal sans gradient
+                # Normal source without gradient
                 if coeff_key in dic_terms:
                     term_value = dic_terms[coeff_key]
-                    # Appliquer SEULEMENT le facteur de divergence
+                    # Apply ONLY the divergence factor
                     result[coeff_key] = div_factor * term_value
                     applied_terms.append(coeff_key)
                     if verbose:
@@ -156,10 +156,10 @@ def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_na
                     incomputable_terms.append((coeff_key, "term not computed"))
         
         else:
-            # Terme simple (pas de div_ ni source_)
+            # Simple term (no div_ or source_)
             if coeff_key in dic_terms:
                 term_value = dic_terms[coeff_key]
-                # Appliquer SEULEMENT le facteur de divergence
+                # Apply ONLY the divergence factor
                 result[coeff_key] = div_factor * term_value
                 applied_terms.append(coeff_key)
             else:
@@ -175,38 +175,37 @@ def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_na
             for term, reason in incomputable_terms:
                 logger.info(f"  {term}: {reason}")
     
-    return result, coeffs  # ← Retourner aussi les coefficients originaux
+    return result, coeffs  # Also return original coefficients
 
 
 def apply_law_coefficients_4satellites(dic_quantities, dic_terms, law_obj, law_name, dic_param, verbose=False):
     # Work in progress: similar to 1 satellite but with handling for 4 satellites
-
     return None
 
 def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, laws=None, nbsatellite=1, trajectory=None, verbose=False):
     """
-    Calcule les termes des lois avec coefficients appliqués.
-    Retourne un dictionnaire plat des termes de lois (div_flux_*, source_*, etc.).
+    Compute law terms with coefficients applied.
+    Returns a flat dictionary of law terms (div_flux_*, source_*, etc.).
     
-    Note: Puisque les termes sont identiques pour toutes les lois (le facteur de divergence
-    est appliqué à tous les termes indépendamment de la loi), les termes ne sont calculés
-    qu'une seule fois pour la première loi valide.
+    Note: Since terms are identical for all laws (the divergence factor
+    is applied to all terms regardless of the law), terms are computed
+    only once for the first valid law.
     
-    Paramètres:
+    Parameters:
     -----------
     dic_quantities : dict
-        Dictionnaire des quantités de base calculées
+        Dictionary of computed base quantities
     dic_terms : dict
-        Dictionnaire des termes de base calculés
+        Dictionary of computed base terms
     dic_param : dict
-        Paramètres de simulation
+        Simulation parameters
     laws : list[str]
-        Liste des lois
+        List of laws
     verbose : bool
     
-    Retour:
+    Returns:
     -------
-    dict : Dictionnaire plat des termes de lois avec coefficients {{term_key: value}}
+    dict : Flat dictionary of law terms with coefficients {{term_key: value}}
     """
     
     if laws is None:
@@ -215,7 +214,7 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
     dic_law_terms = {}
     dic_coefficients = {}
     
-    # Calculer les termes une seule fois (ils sont identiques pour toutes les lois)
+    # Compute terms only once (they are identical for all laws)
     computed = False
     for law_name in laws:
         if law_name not in LAWS:
@@ -229,7 +228,7 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
         try:
             law_obj = LAWS[law_name]
             
-            # Appliquer les coefficients et facteurs de divergence
+            # Apply coefficients and divergence factors
             if nbsatellite == 1:
                 law_terms, law_coeffs = apply_law_coefficients_1satellite(
                     dic_quantities,
@@ -251,12 +250,12 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
                     verbose=verbose
                 )
 
-            # Pour la première loi, stocker les termes (ils seront identiques pour les autres)
+            # For the first law, store the terms (they will be identical for others)
             if not computed:
                 dic_law_terms.update(law_terms)
                 computed = True
             
-            # Ajouter les coefficients avec clés formatées
+            # Add coefficients with formatted keys
             for term_key, coeff_value in law_coeffs.items():
                 dic_coefficients[f"{law_name}_{term_key}"] = coeff_value
             
@@ -270,14 +269,14 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
 
 def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
     """
-    Affiche les résultats des termes de lois le long d'une trajectoire.
+    Display law terms results along a trajectory.
     
-    Paramètres:
+    Parameters:
     -----------
     dic_law_terms : dict
-        Dictionnaire plat des termes de lois {terme: array}
+        Flat dictionary of law terms {term: array}
     title : str
-        Titre de l'affichage
+        Display title
     """
     logger.info(f"\n{title}")
     logger.info("-" * 70)

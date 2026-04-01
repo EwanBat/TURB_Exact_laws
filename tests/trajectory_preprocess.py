@@ -1,7 +1,7 @@
 """
-Module de prétraitement pour les trajectoires satellites.
-Encapsule le chargement des données OCA et la récupération des quantités requises.
-Support pour trajectoires personnalisées - indexage simple dans le cube.
+Preprocessing module for satellite trajectories.
+Encapsulates loading OCA data and retrieving required quantities.
+Support for custom trajectories - simple indexing in the cube.
 """
 
 import logging
@@ -22,29 +22,29 @@ from exact_laws.preprocessing.process_on_oca_files import (
 def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int, 
                         N: np.ndarray) -> np.ndarray:
     """
-    Trajectoire linéaire le long de l'axe x (indices).
+    Linear trajectory along the x axis (indices).
     
-    Paramètres:
+    Parameters:
     -----------
     t : np.ndarray
-        Paramètre de trajectoire (0 à N[0]-1)
+        Trajectory parameter (0 to N[0]-1)
     y_pos : int
-        Position fixe sur y (indice)
+        Fixed position on y (index)
     z_pos : int
-        Position fixe sur z (indice)
+        Fixed position on z (index)
     N : np.ndarray
-        Dimensions de la grille (N[0], N[1], N[2])
+        Grid dimensions (N[0], N[1], N[2])
     
-    Retour:
+    Returns:
     -------
     np.ndarray
-        Points de la trajectoire (n_points, 3) avec [x, y, z] indices
+        Trajectory points (n_points, 3) with [x, y, z] indices
     """
     x = t
     y = np.full_like(t, y_pos, dtype=int)
     z = np.full_like(t, z_pos, dtype=int)
     
-    # Clip aux limites de la grille
+    # Clip to grid limits
     x = np.clip(x, 0, N[0]-1).astype(int)
     y = np.clip(y, 0, N[1]-1).astype(int)
     z = np.clip(z, 0, N[2]-1).astype(int)
@@ -55,27 +55,27 @@ def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int,
 def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: int,
                            N: np.ndarray) -> np.ndarray:
     """
-    Trajectoire circulaire dans le plan xy autour d'un centre (indices).
+    Circular trajectory in the xy plane around a center (indices).
     
-    Paramètres:
+    Parameters:
     -----------
     t : np.ndarray
-        Paramètre de trajectoire (indice 0 à N[0]-1 pour une trajectoire complète)
+        Trajectory parameter (index 0 to N[0]-1 for complete trajectory)
     radius : int
-        Rayon du cercle (en indices de grille)
+        Radius of the circle (in grid indices)
     center_y : int
-        Centre en y (indice)
+        Center in y (index)
     center_z : int
-        Position fixe en z (indice)
+        Fixed position in z (index)
     N : np.ndarray
-        Dimensions de la grille
+        Grid dimensions
     
-    Retour:
+    Returns:
     -------
     np.ndarray
-        Points de la trajectoire (n_points, 3) avec [x, y, z] indices
+        Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    # Paramètre d'angle normalisé (0 à 2π)
+    # Normalized angle parameter (0 to 2π)
     theta = 2 * np.pi * t / N[0]
     
     y = center_y + radius * np.cos(theta)
@@ -93,32 +93,32 @@ def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: 
 def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, center_z: int,
                        N: np.ndarray) -> np.ndarray:
     """
-    Trajectoire hélicoïdale spiralant autour d'un centre (indices).
+    Helical trajectory spiraling around a center (indices).
     
-    Paramètres:
+    Parameters:
     -----------
     t : np.ndarray
-        Paramètre de trajectoire (indice 0 à N[0]-1)
+        Trajectory parameter (index 0 to N[0]-1)
     pitch : int
-        Pas de l'hélice (progression en x par tour complète)
+        Helix pitch (x progression per complete turn)
     radius : int
-        Rayon de l'hélice (en indices)
+        Helix radius (in indices)
     center_y : int
-        Centre en y (indice)
+        Center in y (index)
     center_z : int
-        Centre en z (indice)
+        Center in z (index)
     N : np.ndarray
-        Dimensions de la grille
+        Grid dimensions
     
-    Retour:
+    Returns:
     -------
     np.ndarray
-        Points de la trajectoire (n_points, 3) avec [x, y, z] indices
+        Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    # Progression en x avec pitch
+    # X progression with pitch
     x = (t / N[0]) * pitch
     
-    # Paramètre d'angle normalisé
+    # Normalized angle parameter
     theta = 2 * np.pi * t / N[0]
     
     y = center_y + radius * np.cos(theta)
@@ -134,26 +134,26 @@ def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, ce
 
 def trajectory_diagonal(t: np.ndarray, N: np.ndarray) -> np.ndarray:
     """
-    Trajectoire diagonale à travers le cube.
+    Diagonal trajectory through the cube.
     
-    Paramètres:
+    Parameters:
     -----------
     t : np.ndarray
-        Paramètre de trajectoire (0 à N[0]-1)
+        Trajectory parameter (0 to N[0]-1)
     N : np.ndarray
-        Dimensions de la grille
+        Grid dimensions
     
-    Retour:
+    Returns:
     -------
     np.ndarray
-        Points de la trajectoire (n_points, 3) avec [x, y, z] indices
+        Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    # Progression en x, y, z proportionnelle
+    # X, y, z progression proportional
     x = t
     y = (t * N[1] / N[0]).astype(int)
     z = (t * N[2] / N[0]).astype(int)
     
-    # Clip aux limites
+    # Clip to limits
     x = np.clip(x, 0, N[0]-1).astype(int)
     y = np.clip(y, 0, N[1]-1).astype(int)
     z = np.clip(z, 0, N[2]-1).astype(int)
@@ -164,7 +164,7 @@ def trajectory_diagonal(t: np.ndarray, N: np.ndarray) -> np.ndarray:
 # ========== UTILITY FUNCTIONS ==========
 
 def setup_logging(config_name="trajectory_preprocess"):
-    """Crée un logger avec timestamp."""
+    """Create a logger with timestamp."""
     log_filename = f"{config_name}_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
     logging.basicConfig(
         filename=log_filename,
@@ -177,20 +177,20 @@ def setup_logging(config_name="trajectory_preprocess"):
 
 def load_oca_data(input_folder, cycle, sim_type):
     """
-    Charge toutes les données OCA requises.
+    Loads all required OCA data.
     
-    Paramètres:
+    Parameters:
     -----------
     input_folder : str
-        Chemin du dossier contenant les fichiers 3Dfields_*.h5
+        Path to folder containing 3Dfields_*.h5 files
     cycle : str
-        Nom du cycle (ex: "cycle_0")
+        Name of the cycle (ex: "cycle_0")
     sim_type : str
-        Type de simulation (ex: "CGL5") pour identifier les paramètres
+        Simulation type (ex: "CGL5") to identify parameters
     
-    Retour:
+    Returns:
     -------
-    tuple : (dic_datas, dic_param) dictionnaires des quantités et paramètres
+    tuple : (dic_datas, dic_param) dictionaries of quantities and parameters
     """
     logging.info("\n" + "="*70)
     logging.info("LOADING OCA DATA")
@@ -253,9 +253,9 @@ def load_oca_data(input_folder, cycle, sim_type):
 
 def load_config_from_ini(config_file):
     """
-    Charge les paramètres depuis un fichier .ini
+    Load parameters from a .ini file
     
-    Retour:
+    Returns:
     -------
     tuple : (laws, terms, quantities, physical_params)
     """
@@ -277,36 +277,36 @@ def load_config_from_ini(config_file):
     return laws, terms, quantities, physical_params
 
 def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray, 
-                                       nbsatellite: int = 1, separation: int = 2) -> dict:
+                                       nbsatellite: int = 1, gap_satellite: int = 2) -> dict:
     """
-    Extrait les quantités le long d'une ou plusieurs trajectoires (indices).
+    Extract quantities along one or multiple trajectories (indices).
     
-    Paramètres:
+    Parameters:
     -----------
     dic_datas : dict
-        Dictionnaire des quantités 3D
+        Dictionary of 3D quantities
     trajectory : np.ndarray
-        Trajectoire centrale (n_points, 3) en indices
+        Central trajectory (n_points, 3) in indices
     nbsatellite : int
-        Nombre de satellites (1 ou 4)
-    separation : int
-        Séparation entre les satellites en indices (utilisé si nbsatellite=4)
+        Number of satellites (1 or 4)
+    gap_satellite : int
+        Gap between satellites in indices (used if nbsatellite=4)
     
-    Retour:
+    Returns:
     -------
-    dict : Quantités 1D extraites le long de la/des trajectoire(s)
-           Si nbsatellite=1: {quantity_name: (n_points,)}
-           Si nbsatellite=4: {quantity_name: {sat_0: (n_points,), sat_1: ..., sat_2: ..., sat_3: ...}}
+    dict : 1D quantities extracted along trajectory/trajectories
+           If nbsatellite=1: {quantity_name: (n_points,)}
+           If nbsatellite=4: {quantity_name: {sat_0: (n_points,), sat_1: ..., sat_2: ..., sat_3: ...}}
     """
     n_points = len(trajectory)
     
     if nbsatellite == 1:
-        # = ==== SINGLE SATELLITE ====
+        # ===== SINGLE SATELLITE =====
         trajectory_data = {}
         
         for key in dic_datas.keys():
             if isinstance(dic_datas[key], np.ndarray) and dic_datas[key].ndim == 3:
-                # Extraire les valeurs le long de la trajectoire
+                # Extract values along the trajectory
                 trajectory_data[key] = np.array([
                     dic_datas[key][int(trajectory[i, 0]), int(trajectory[i, 1]), int(trajectory[i, 2])]
                     for i in range(n_points)
@@ -316,22 +316,21 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
     
     elif nbsatellite == 4:
         # ========== QUAD SATELLITE =========
-        # Définir les 4 satellites en carré centré
-        half_sep = separation / 2
+        # Define 4 satellites in a centered square
         satellites = {
-            'sat_0': np.array([half_sep, half_sep, 0]),   # Centre-avant
-            'sat_1': np.array([half_sep, -half_sep, 0]),  # Avant-bas
-            'sat_2': np.array([-half_sep, half_sep, 0]),  # Arrière-haut
-            'sat_3': np.array([-half_sep, -half_sep, 0])  # Arrière-bas
+            'sat_0': np.array([0, 0, 0]),   # Center
+            'sat_1': np.array([gap_satellite, 0, 0]),  # x positive
+            'sat_2': np.array([0, gap_satellite, 0]),  # y positive
+            'sat_3': np.array([0, 0, gap_satellite])   # z positive
         }
         
-        # Générer les 4 trajectoires
+        # Generate 4 trajectories
         trajectories = {}
         for sat_name, offset in satellites.items():
             traj = trajectory + offset
             trajectories[sat_name] = np.clip(traj, 0, 255).astype(int)
         
-        # Extraire les données pour chaque satellite
+        # Extract data for each satellite
         trajectory_data = {}
         
         for key in dic_datas.keys():
@@ -339,34 +338,34 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
                 trajectory_data[key] = {}
                 
                 for sat_name, traj in trajectories.items():
-                    # Extraire les valeurs le long de cette trajectoire satellite
+                    # Extract values along this satellite trajectory
                     trajectory_data[key][sat_name] = np.array([
                         dic_datas[key][int(traj[i, 0]), int(traj[i, 1]), int(traj[i, 2])]
                         for i in range(n_points)
                     ])
             else:
-                # Garder les scalaires comme avant
+                # Keep scalars as before
                 trajectory_data[key] = dic_datas[key]
     
     else:
-        raise ValueError(f"nbsatellite doit être 1 ou 4, got {nbsatellite}")
+        raise ValueError(f"nbsatellite must be 1 or 4, got {nbsatellite}")
     
     return trajectory_data
 
 def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict) -> dict:
     """
-    Extrait les coordonnées physiques (x, y, z) le long de la trajectoire à partir des indices.
+    Extract physical coordinates (x, y, z) along the trajectory from indices.
     
-    Paramètres:
+    Parameters:
     -----------
     trajectory : np.ndarray
-        Trajectoire en indices (n_points, 3)
+        Trajectory in indices (n_points, 3)
     dic_param : dict
-        Dictionnaire contenant les paramètres de la simulation, notamment 'lx', 'ly', 'lz'
+        Dictionary containing simulation parameters, particularly 'lx', 'ly', 'lz'
     
-    Retour:
+    Returns:
     -------
-    dict : Dictionnaire avec les coordonnées physiques le long de la trajectoire
+    dict : Dictionary with physical coordinates along the trajectory
            {'x': (n_points,), 'y': (n_points,), 'z': (n_points,)}
     """
     
@@ -388,30 +387,30 @@ def preprocess_trajectory_from_ini(ini_file,
                                    input_folder: str = "data_oca",
                                    verbose: bool = True):
     """
-    Charge la configuration depuis un fichier INI et prétraite le long d'une trajectoire.
+    Load configuration from an INI file and preprocess along a trajectory.
     
-    Paramètres:
+    Parameters:
     -----------
     ini_file : str
-        Chemin du fichier .ini de configuration (ex: "traj_satellite.ini")
-    trajectory_func : Callable, optionnel
-        Fonction qui renvoie une trajectoire: f(t, N, **trajectory_kwargs) -> np.ndarray (n_points, 3)
-        Si None, utilise trajectory_linear_x avec y_pos=100, z_pos=100
-    trajectory_kwargs : dict, optionnel
-        Arguments additionnels pour trajectory_func (tous en indices, pas en unités physiques)
+        Path to the configuration .ini file (ex: "traj_satellite.ini")
+    trajectory_func : Callable, optional
+        Function returning a trajectory: f(t, N, **trajectory_kwargs) -> np.ndarray (n_points, 3)
+        If None, uses trajectory_linear_x with y_pos=100, z_pos=100
+    trajectory_kwargs : dict, optional
+        Additional arguments for trajectory_func (all in indices, not physical units)
     input_folder : str
-        Chemin du dossier contenant les données OCA
+        Path to folder containing OCA data
     verbose : bool
-        Afficher les informations détaillées
+        Display detailed information
     
-    Retour:
+    Returns:
     -------
-    dict : Résultats contenant:
-        - 'config': Configuration chargée
-        - 'required_quantities': Quantités requises
-        - 'dic_datas': Données brutes extraites le long de la trajectoire (1D)
-        - 'dic_param': Paramètres de simulation
-        - 'trajectory': Points de la trajectoire utilisée (indices)
+    dict : Results containing:
+        - 'config': Loaded configuration
+        - 'required_quantities': Required quantities
+        - 'dic_datas': Raw data extracted along trajectory (1D)
+        - 'dic_param': Simulation parameters
+        - 'trajectory': Trajectory points used (indices)
     """
     
     # Setup logging
@@ -422,13 +421,13 @@ def preprocess_trajectory_from_ini(ini_file,
         logging.info(f"PREPROCESSING TRAJECTORY FROM {ini_file}")
         logging.info("="*70)
     
-    # Vérifier que le fichier existe
+    # Check that the file exists
     ini_path = Path(ini_file)
     if not ini_path.exists():
-        raise FileNotFoundError(f"Fichier de configuration non trouvé: {ini_file}")
+        raise FileNotFoundError(f"Configuration file not found: {ini_file}")
     
     if verbose:
-        logging.info(f"Fichier INI trouvé: {ini_path.absolute()}")
+        logging.info(f"INI file found: {ini_path.absolute()}")
     
     # Load configuration from INI file
     if verbose:
@@ -437,10 +436,10 @@ def preprocess_trajectory_from_ini(ini_file,
     try:
         laws, terms, quantities, physical_params = load_config_from_ini(ini_file)
     except KeyError as e:
-        logging.error(f"Clé manquante dans le fichier INI: {e}")
+        logging.error(f"Missing key in INI file: {e}")
         raise
     except Exception as e:
-        logging.error(f"Erreur lors de la lecture du fichier INI: {e}")
+        logging.error(f"Error reading INI file: {e}")
         raise
     
     # Load additional parameters from INI
@@ -449,23 +448,24 @@ def preprocess_trajectory_from_ini(ini_file,
     try:
         config.read(ini_file)
     except Exception as e:
-        logging.error(f"Erreur lors du parsing du fichier INI: {e}")
+        logging.error(f"Error parsing INI file: {e}")
         raise
     
-    # Vérifier les sections requises
+    # Check required sections
     required_sections = ['RUN_PARAMS', 'INPUT_DATA']
     for section in required_sections:
         if section not in config:
-            raise ValueError(f"Section requise manquante dans le fichier INI: [{section}]")
+            raise ValueError(f"Required section missing in INI file: [{section}]")
     
     try:
         nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", 1)
-        dist_satellite = config["RUN_PARAMS"].getfloat("dist_satellite", 1)
+        gap_satellite = config["RUN_PARAMS"].getfloat("gap_satellite", 1)
         input_folder = config["INPUT_DATA"].get("path", input_folder)
         cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
         sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
+        di = config["PHYSICAL_PARAMS"].getfloat("di", 1.0)
     except Exception as e:
-        logging.error(f"Erreur lors de la lecture des paramètres: {e}")
+        logging.error(f"Error reading parameters: {e}")
         raise
     
     if verbose:
@@ -474,16 +474,17 @@ def preprocess_trajectory_from_ini(ini_file,
         logging.info(f"  Quantities:      {quantities}")
         logging.info(f"  Physical params: {physical_params}")
         logging.info(f"  Nbsatellite:     {nbsatellite}")
-        logging.info(f"  Dist satellite:  {dist_satellite}")
+        logging.info(f"  Gap satellite:   {gap_satellite}")
         logging.info(f"  Input folder:    {input_folder}")
         logging.info(f"  Cycle:           {cycle}")
         logging.info(f"  Sim type:        {sim_type}")
+        logging.info(f"  Ion inertial length (di): {di}")
     
     # Load OCA data (3D)
     try:
         dic_datas_3d, dic_param = load_oca_data(input_folder, cycle, sim_type)
     except Exception as e:
-        logging.error(f"Erreur lors du chargement des données OCA: {e}")
+        logging.error(f"Error loading OCA data: {e}")
         raise
     
     # Determine required quantities
@@ -514,7 +515,7 @@ def preprocess_trajectory_from_ini(ini_file,
         t = np.arange(dic_param['N'][0])
         trajectory = trajectory_func(t, N=dic_param['N'], **trajectory_kwargs)
     except Exception as e:
-        logging.error(f"Erreur lors de la génération de la trajectoire: {e}")
+        logging.error(f"Error generating trajectory: {e}")
         raise
     
     if verbose:
@@ -526,7 +527,7 @@ def preprocess_trajectory_from_ini(ini_file,
             logging.info(f"  Central trajectory:")
             logging.info(f"    First point (indices): {trajectory[0]}")
             logging.info(f"    Last point (indices):  {trajectory[-1]}")
-            logging.info(f"  Separation between satellites: {dist_satellite}")
+            logging.info(f"  Separation between satellites: {gap_satellite}")
     
     # Extract quantities along trajectory
     if verbose:
@@ -538,7 +539,7 @@ def preprocess_trajectory_from_ini(ini_file,
         dic_datas_3d, 
         trajectory, 
         nbsatellite=nbsatellite, 
-        separation=int(dist_satellite)
+        gap_satellite=int(gap_satellite)
     )
 
     extract_coordinates_along_trajectory(trajectory, dic_param) # Physical coordinates to dic_param
@@ -550,6 +551,7 @@ def preprocess_trajectory_from_ini(ini_file,
         dic_param["meanpperp"] = np.mean(dic_datas['pperp'],axis=0) if nbsatellite == 1 else {sat: np.mean(dic_datas['pperp'][sat]) for sat in dic_datas['pperp']}
     if 'rho' in dic_datas:
         dic_param["rho_mean"] = np.mean(dic_datas['rho'],axis=0) if nbsatellite == 1 else {sat: np.mean(dic_datas['rho'][sat]) for sat in dic_datas['rho']}
+    dic_param["di"] = di
 
     if verbose:
         logging.info(f"  Extracted {len(dic_datas)} quantities")
@@ -578,9 +580,9 @@ def preprocess_trajectory_from_ini(ini_file,
             'quantities': quantities,
             'physical_params': physical_params,
             'nbsatellite': nbsatellite,
-            'dist_satellite': dist_satellite
+            'gap_satellite': gap_satellite
         },
-        'dic_datas': dic_datas,  # Données 1D extraites le long de la/des trajectoire(s)
+        'dic_datas': dic_datas,  # 1D data extracted along trajectory/trajectories
         'dic_param': dic_param,
         'trajectory': trajectory
     }
