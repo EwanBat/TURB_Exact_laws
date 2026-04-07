@@ -5,8 +5,8 @@ from datetime import datetime
 from trajectory_preprocess import preprocess_trajectory_from_ini, trajectory_linear_x, trajectory_helical
 from trajectory_quantities import extract_trajectory_and_compute
 from trajectory_terms import compute_all_terms_for_laws
-from trajectory_laws import compute_laws_terms_with_coefficients
-from visualisation_traj import see_trajectory_in_space
+from trajectory_laws import compute_laws_terms_with_coefficients, laws_to_h5
+from visualisation_traj import see_trajectory_in_space, plot_laws_along_trajectory, comparison_glob_traj
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import time
@@ -68,42 +68,26 @@ if results['config']['nbsatellite'] == 1:
         verbose=True)
 
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
-        dic_quantities=dic_quantities,
         dic_terms=dic_terms,
         laws=laws,
         dic_param=results['dic_param'],
         nbsatellite=results['config']['nbsatellite'],
         trajectory=trajectory,
         verbose=True
-    ) 
+    )
+
+    laws_to_h5(dic_law_terms, dic_law_coeff, trajectory_name+"_laws.h5")
+
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
 
-    def linear_op_from_list_term(coeffs, quantities, list_term):
-        coeff = {k.split('_', 1)[1]: coeffs[k] for k in coeffs if k in list_term}
-        result = np.zeros(np.shape(quantities[list(coeff.keys())[0]]))
-        for k in coeff.keys():
-            result += coeff[k] * quantities[k]
-        return result
+    plot_laws_along_trajectory(dic_param, laws, dic_law_coeff, dic_law_terms, trajectory_name)
 
-    dic_of_list_terms = {}
-    dic_of_list_terms['PP98'] = [k for k in dic_law_coeff.keys() if k.split('_', 1)[0] == 'PP98']
-
-    results_plot = {}
-    for law in dic_of_list_terms.keys():
-        list_term = dic_of_list_terms[law]
-        results_plot[law] = np.transpose(linear_op_from_list_term(dic_law_coeff, dic_law_terms, list_term))
-
-    plt.figure(figsize=(8, 6))
-    plt.xscale('log')
-    plt.yscale('symlog', linthresh=1e-10, base=10)
-    plt.plot(dic_param['lx'], results_plot['PP98'], label='PP98')
-    plt.xlabel('lx [di]')
-    plt.ylabel(r'$epsilon_{PP98}$')
-    plt.suptitle('PP98 along trajectory')
-    plt.title(f"Trajectory: {trajectory_name}")
-    plt.legend()
-    plt.savefig(f"PP98_{trajectory_name}.png")
+    if trajectory_name == "linear_x":
+        comparison_glob_traj(trajectory, dic_param, 
+                         traj_file = trajectory_name+"_laws.h5", 
+                         global_file = "OCA_CGL5_processed_PP98_reduc1.h5", 
+                         trajectory_name=trajectory_name)
 
 elif results['config']['nbsatellite'] == 4:
 
@@ -128,88 +112,3 @@ elif results['config']['nbsatellite'] == 4:
     plt.tight_layout()
     plt.savefig(f"terms_trajectory_4sat_{trajectory_name}.png")
 
-
-# %% Configuration
-def multiple_trajectories_different_y():
-    config_file = "tests/traj_satellite.ini"
-    log_filename = f"test_1satellite_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
-    logging.basicConfig(
-        filename=log_filename,
-        level=logging.INFO,
-        format='%(asctime)s | %(levelname)-7s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    y = np.arange(0, 512, 60)
-    plt.figure(figsize=(10, 6))
-    z_pos = 100
-    for i,y_pos in enumerate(y):
-        results = preprocess_trajectory_from_ini(
-            ini_file=config_file,
-            trajectory_func=trajectory_linear_x,
-            trajectory_kwargs={'y_pos': y_pos, 'z_pos': z_pos},
-            verbose=True
-        )
-
-        # Extract results
-        config = results['config']
-        dic_datas = results['dic_datas']  # 1D extracted data
-        dic_param = results['dic_param']
-        trajectory = results['trajectory']
-
-        laws = config['laws']
-        terms = config['terms']
-        quantities = config['quantities']
-        physical_params = config['physical_params']
-        nbsatellite = config['nbsatellite']
-
-        dic_quantities = extract_trajectory_and_compute(
-            results['dic_datas'], 
-            dic_param=results['dic_param'],
-            laws=laws,
-            nbsatellite=results['config']['nbsatellite'],
-            verbose=True
-        )
-
-
-        dic_terms = compute_all_terms_for_laws(
-            dic_quantities = dic_quantities, 
-            dic_param=results['dic_param'], 
-            laws=laws, 
-            nbsatellite=results['config']['nbsatellite'],
-            verbose=True)
-
-        dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
-            dic_quantities=dic_quantities,
-            dic_terms=dic_terms,
-            laws=laws,
-            dic_param=results['dic_param'],
-            nbsatellite=results['config']['nbsatellite'],
-            trajectory=trajectory,
-            verbose=True
-        )  
-
-        def linear_op_from_list_term(coeffs, quantities, list_term):
-            coeff = {k.split('_', 1)[1]: coeffs[k] for k in coeffs if k in list_term}
-            result = np.zeros(np.shape(quantities[list(coeff.keys())[0]]))
-            for k in coeff.keys():
-                result += coeff[k] * quantities[k]
-            return result
-
-        dic_of_list_terms = {}
-        dic_of_list_terms['PP98'] = [k for k in dic_law_coeff.keys() if k.split('_', 1)[0] == 'PP98']
-
-        results_plot = {}
-        for law in dic_of_list_terms.keys():
-            list_term = dic_of_list_terms[law]
-            results_plot[law] = np.transpose(linear_op_from_list_term(dic_law_coeff, dic_law_terms, list_term))
-        
-        plt.plot(dic_param['lx'], results_plot['PP98'], label=f'PP98, y={y_pos} di', alpha = int(255*(i+1)/len(y))/255)
-
-    plt.xlabel('lx [di]')
-    plt.ylabel(r'$\epsilon_{PP98}$')
-    plt.title(f'PP98 along trajectory for different y positions, z={z_pos} di')
-    plt.xscale('log')
-    plt.yscale('symlog', linthresh=1e-10, base=10)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"PP98_trajectory_different_y_z{z_pos}.png")

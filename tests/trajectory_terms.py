@@ -126,7 +126,6 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
             if var not in dic_quant:
                 raise ValueError(f"Variable '{var}' not found in data and not in VARIABLE_COMPONENTS mapping")
             concrete_data.append(dic_quant[var])
-    
     return concrete_data
 
 
@@ -165,9 +164,8 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
         if nbsatellite == 1:
             # Convert to concrete components
             args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
-
             # Call calc_fourier for 1D data
-            result = term_obj.calc_fourier(*args, dic_param=dic_param)
+            result = term_obj.calc_fourier(*args, dic_param=dic_param, traj=True)
             if type(result) != np.ndarray:
                 result = np.array(result)
         elif nbsatellite == 4:
@@ -185,7 +183,7 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
                 args_sat = get_concrete_variables_from_abstract(abstract_vars, dic_quant_sat)
                 
                 # Compute term for this satellite
-                result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat)
+                result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
                 if type(result_sat) != np.ndarray:
                     result_sat = np.array(result_sat)
                 result[sat_name] = result_sat

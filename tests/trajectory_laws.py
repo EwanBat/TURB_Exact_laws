@@ -7,7 +7,10 @@ For divergences, uses a common factor per law instead of computing it explicitly
 
 import numpy as np
 import logging
+import h5py
+
 from exact_laws.el_calc_mod.laws import LAWS
+from derivation_satellite import divergence_1satellite
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ def get_divergence_factor_for_law(law_name):
     return DIVERGENCE_REPLACEMENT_FACTORS.get(law_name, 1.0)
 
 
-def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_name, dic_param, trajectory=None, verbose=False):
+def apply_law_coefficients_1satellite(dic_terms, law_obj, law_name, dic_param, trajectory=None, verbose=False):
     """
     Apply ONLY the divergence factor to the terms.
     Law-specific coefficients are not applied here.
@@ -120,7 +123,7 @@ def apply_law_coefficients_1satellite(dic_quantities, dic_terms, law_obj, law_na
             if base_term in dic_terms:
                 term_value = dic_terms[base_term]
                 # Apply the divergence factor (not the coefficient)
-                result[coeff_key] = div_factor * np.linalg.norm(term_value * np.transpose(trajectory),axis=0) / np.linalg.norm(trajectory,axis=1)
+                result[coeff_key] = divergence_1satellite(term_value, dic_param)
                 applied_terms.append(coeff_key)
                 if verbose and is_flux_term:
                     logger.info(f"{coeff_key} (flux): div_factor={div_factor:.4f} applied")
@@ -182,7 +185,7 @@ def apply_law_coefficients_4satellites(dic_quantities, dic_terms, law_obj, law_n
     # Work in progress: similar to 1 satellite but with handling for 4 satellites
     return None
 
-def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, laws=None, nbsatellite=1, trajectory=None, verbose=False):
+def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsatellite=1, trajectory=None, verbose=False):
     """
     Compute law terms with coefficients applied.
     Returns a flat dictionary of law terms (div_flux_*, source_*, etc.).
@@ -231,7 +234,6 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
             # Apply coefficients and divergence factors
             if nbsatellite == 1:
                 law_terms, law_coeffs = apply_law_coefficients_1satellite(
-                    dic_quantities,
                     dic_terms, 
                     law_obj, 
                     law_name, 
@@ -242,7 +244,6 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
             
             elif nbsatellite == 4:
                 law_terms, law_coeffs = apply_law_coefficients_4satellites(
-                    dic_quantities,
                     dic_terms,
                     law_obj,
                     law_name,
@@ -266,6 +267,33 @@ def compute_laws_terms_with_coefficients(dic_quantities, dic_terms, dic_param, l
             logger.error(f"Failed to process {law_name}: {e}")
     
     return dic_law_terms, dic_coefficients
+
+def laws_to_h5(dic_law_terms, dic_coefficients, filename="laws_terms.h5"):
+    """
+    Save law terms and coefficients to an HDF5 file.
+    
+    Parameters:
+    -----------
+    dic_law_terms : dict
+        Flat dictionary of law terms {term_key: value}
+    dic_coefficients : dict
+        Dictionary of coefficients {law_term_key: coeff_value}
+    filename : str
+        Output HDF5 filename
+    """
+    
+    with h5py.File(filename, 'w') as f:
+        # Save law terms
+        law_terms_group = f.create_group('law_terms')
+        for term_key, value in dic_law_terms.items():
+            law_terms_group.create_dataset(term_key, data=value)
+        
+        # Save coefficients
+        coeffs_group = f.create_group('coefficients')
+        for coeff_key, coeff_value in dic_coefficients.items():
+            coeffs_group.create_dataset(coeff_key, data=coeff_value)
+    
+    logger.info(f"Saved law terms and coefficients to {filename}")
 
 def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
     """

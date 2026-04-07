@@ -312,8 +312,10 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
                     dic_datas[key][int(trajectory[i, 0]), int(trajectory[i, 1]), int(trajectory[i, 2])]
                     for i in range(n_points)
                 ])
+                # trajectory_data[key] = np.append(trajectory_data[key], trajectory_data[key][0])  # Add one point to have a periodic trajectory for Fourier transforms
             else:
                 trajectory_data[key] = dic_datas[key]
+                # trajectory_data[key] = np.append(trajectory_data[key], trajectory_data[key][0])  # Add one point to have a periodic trajectory for Fourier transforms
     
     elif nbsatellite == 4:
         # ========== QUAD SATELLITE =========
@@ -370,17 +372,89 @@ def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict
            {'x': (n_points,), 'y': (n_points,), 'z': (n_points,)}
     """
     
-    lx = np.arange(0, dic_param['N'][0]) * dic_param['c'][0]
-    ly = np.arange(0, dic_param['N'][1]) * dic_param['c'][1]
-    lz = np.arange(0, dic_param['N'][2]) * dic_param['c'][2]
+    lx = dic_param['lx']
+    ly = dic_param['ly']
+    lz = dic_param['lz']
+    tangents = dic_param['tangents']
 
-    x = lx[trajectory[:, 0]]
-    y = ly[trajectory[:, 1]]
-    z = lz[trajectory[:, 2]]
+    ltraj = tangents[:, 0] * lx[trajectory[:, 0]] + tangents[:, 1] * ly[trajectory[:, 1]] + tangents[:, 2] * lz[trajectory[:, 2]]
+    dic_param['ltraj'] = ltraj
 
-    dic_param['lx'] = x
-    dic_param['ly'] = y
-    dic_param['lz'] = z
+def compute_tangent_vectors_from_parameter(trajectory_func: Callable, 
+                                           t_array: np.ndarray, 
+                                           N: np.ndarray, 
+                                           dic_param: dict,
+                                           **kwargs) -> np.ndarray:
+    """
+    Compute tangent vectors by numerical differentiation of the trajectory function.
+    
+    Parameters:
+    -----------
+    trajectory_func : Callable
+        Function that generates trajectory (e.g., trajectory_linear_x)
+    t_array : np.ndarray
+        Parameter values (0 to N[0]-1)
+    N : np.ndarray
+        Grid dimensions
+    dic_param : dict
+        Contains 'lx', 'ly', 'lz' for physical coordinates
+    **kwargs : dict
+        Arguments for trajectory_func
+    
+    Returns:
+    -------
+    np.ndarray
+        Normalized tangent vectors (n_points, 3)
+    """
+    n_points = len(t_array)
+    dt = 1.0  # Index spacing
+    tangents = np.zeros((n_points, 3))
+    
+    lx = np.arange(dic_param['N'][0]) * dic_param['c'][0]
+    ly = np.arange(dic_param['N'][1]) * dic_param['c'][1]
+    lz = np.arange(dic_param['N'][2]) * dic_param['c'][2]
+    
+    for i in range(n_points):
+        if i == 0:
+            t_curr = t_array[i]
+            t_next = t_array[i+1]
+        elif i == n_points - 1:
+            t_prev = t_array[i-1]
+            t_curr = t_array[i]
+        else:
+            t_prev = t_array[i-1]
+            t_next = t_array[i+1]
+        
+        if i == 0:
+            traj_curr = trajectory_func(np.array([t_curr]), N=N, **kwargs)[0]
+            traj_next = trajectory_func(np.array([t_next]), N=N, **kwargs)[0]
+            pos_curr = np.array([lx[traj_curr[0]], ly[traj_curr[1]], lz[traj_curr[2]]])
+            pos_next = np.array([lx[traj_next[0]], ly[traj_next[1]], lz[traj_next[2]]])
+            tangent = pos_next - pos_curr
+        elif i == n_points - 1:
+            traj_prev = trajectory_func(np.array([t_prev]), N=N, **kwargs)[0]
+            traj_curr = trajectory_func(np.array([t_curr]), N=N, **kwargs)[0]
+            pos_prev = np.array([lx[traj_prev[0]], ly[traj_prev[1]], lz[traj_prev[2]]])
+            pos_curr = np.array([lx[traj_curr[0]], ly[traj_curr[1]], lz[traj_curr[2]]])
+            tangent = pos_curr - pos_prev
+        else:
+            traj_prev = trajectory_func(np.array([t_prev]), N=N, **kwargs)[0]
+            traj_next = trajectory_func(np.array([t_next]), N=N, **kwargs)[0]
+            pos_prev = np.array([lx[traj_prev[0]], ly[traj_prev[1]], lz[traj_prev[2]]])
+            pos_next = np.array([lx[traj_next[0]], ly[traj_next[1]], lz[traj_next[2]]])
+            tangent = pos_next - pos_prev
+        
+        # Normalize
+        norm = np.linalg.norm(tangent,axis=0)
+        if norm > 0:
+            tangents[i] = tangent / norm
+        else:
+            tangents[i] = np.array([1.0, 0.0, 0.0])
+    
+    dic_param['lx'] = lx
+    dic_param['ly'] = ly
+    dic_param['lz'] = lz
+    dic_param['tangents'] = tangents
 
 def preprocess_trajectory_from_ini(ini_file,
                                    input_folder: str = "",
@@ -538,6 +612,9 @@ def preprocess_trajectory_from_ini(ini_file,
         gap_satellite=int(gap_satellite)
     )
 
+    # Compute tangent vectors along the trajectory
+    compute_tangent_vectors_from_parameter(trajectory_func, t, dic_param['N'], dic_param, **trajectory_kwargs)
+    # Get physical coordinates along the trajectory
     extract_coordinates_along_trajectory(trajectory, dic_param) # Physical coordinates to dic_param
     
     # Add means if available

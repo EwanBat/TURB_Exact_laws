@@ -287,7 +287,7 @@ def compute_divergence_stub(base_quantity: str, dic_quant: dict, separation: flo
     return result
 
 
-def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, nbsatellite=1, 
+def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, dic_param, nbsatellite=1, 
                                      separation=1.0, verbose=False):
     """
     Compute a quantity using QUANTITIES objects.
@@ -305,9 +305,9 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, nbsate
         base_quantity = quantity_name.replace('div', '').lstrip('I').replace('grad', '')
         
         if 'div' in quantity_name:
-            result = compute_divergence_stub(base_quantity, dic_quant, separation)
+            result = compute_divergence_stub(base_quantity, dic_datas, separation)
         else:
-            result = compute_gradient_stub(quantity_name, dic_quant, separation)
+            result = compute_gradient_stub(quantity_name, dic_datas, separation)
         
         return result
     
@@ -326,7 +326,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, nbsate
     if nbsatellite == 1:
         mock_file = MockFile()
         try:
-            QUANTITIES[quantity_name].create_datasets(mock_file, dic_quant, dic_param)
+            QUANTITIES[quantity_name].create_datasets(mock_file, dic_datas, dic_param)
         except Exception as e:
             if verbose:
                 logger.error(f"Failed to compute {quantity_name}: {e}")
@@ -341,7 +341,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_quant, dic_param, nbsate
             # Extract satellite-specific data and parameters
             dic_quant_sat = {}
             dic_param_sat = {}
-            for key, value in dic_quant.items():
+            for key, value in dic_datas.items():
                 dic_quant_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
             for key, value in dic_param.items():
                 dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
