@@ -9,8 +9,6 @@ import numpy as np
 import logging
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
-from trajectory_quantities import list_computable_quantities
-
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +64,44 @@ VARIABLE_COMPONENTS = {
 }
 
 
-def list_required_terms(laws=None, dic_param=None):
+def _prepare_dic_param_for_terms_and_coeffs(dic_param, nbsatellite=1):
+    """
+    Prepare dic_param for terms_and_coeffs() by converting list-based parameters to scalars.
+    
+    Parameters:
+    -----------
+    dic_param : dict
+        Dictionary with potentially list-based parameters (one value per trajectory)
+    nbsatellite : int
+        Number of satellites
+    
+    Returns:
+    -------
+    dict : Cleaned dictionary with scalar parameters
+    """
+    params_clean = {}
+    
+    for key, value in dic_param.items():
+        if isinstance(value, list):
+            # Extract first element from list (same parameter for all trajectories)
+            params_clean[key] = value[0]
+        elif isinstance(value, dict):
+            # For nbsatellite=4, extract first satellite and first trajectory
+            if 'sat_0' in value:
+                first_sat_value = value['sat_0']
+                if isinstance(first_sat_value, list):
+                    params_clean[key] = first_sat_value[0]
+                else:
+                    params_clean[key] = first_sat_value
+            else:
+                params_clean[key] = value
+        else:
+            params_clean[key] = value
+    
+    return params_clean
+
+
+def list_required_terms(laws=None, physical_param=None, nbsatellite=1):
     """
     Returns the list of required terms to compute the given laws.
     
@@ -74,6 +109,10 @@ def list_required_terms(laws=None, dic_param=None):
     -----------
     laws : list[str]
         List of law names
+    dic_param : dict
+        Simulation parameters
+    nbsatellite : int
+        Number of satellites (1 or 4)
     
     Returns:
     -------
@@ -84,18 +123,21 @@ def list_required_terms(laws=None, dic_param=None):
     
     terms = set()
     
+    if not laws:
+        return terms
+    
+    # Prepare parameters for terms_and_coeffs (convert lists to scalars)
+    params_clean = _prepare_dic_param_for_terms_and_coeffs(physical_param, nbsatellite)
+    
     # Add terms from laws
-    if laws:
-        for law_name in laws:
-            if law_name in LAWS:
-                law_obj = LAWS[law_name]
-                # terms_and_coeffs() returns (terms_list, coeffs_dict)
-                # Pass empty parameters for this step
-                law_terms, _ = law_obj.terms_and_coeffs(dic_param)
-                terms.update(law_terms)
+    for law_name in laws:
+        if law_name in LAWS:
+            law_obj = LAWS[law_name]
+            # terms_and_coeffs() returns (terms_list, coeffs_dict)
+            law_terms, _ = law_obj.terms_and_coeffs(params_clean)
+            terms.update(law_terms)
     
     return terms
-
 
 def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     """
@@ -129,28 +171,31 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     return concrete_data
 
 
-def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verbose=False):
+def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1, verbose=False):
     """
-    Compute a term using the calc_fourier method from TERMS.
-    Adapted for 1D trajectory data.
+    Compute a single term using the calc_fourier method from TERMS.
+    
+    Adapted for 1D trajectory data. Handles single satellite or 4-satellite 
+    formations by extracting satellite-specific data before computation.
     
     Parameters:
     -----------
     term_name : str
-        Name of the term (ex: "flux_dvdvdv", "bg17_vwv")
+        Name of the term to compute (e.g., "flux_dvdvdv", "bg17_vwv")
     dic_quant : dict
         Dictionary of 1D data (trajectory) with computed quantities
-    dic_param : dict
-        Simulation parameters
+    physical_param : dict
+        Physical parameters
+    nbsatellite : int
+        Number of satellites (1 or 4)
     verbose : bool
+        Logging flag (normally False to avoid spam in loops)
     
     Returns:
     -------
-    np.ndarray : Value of the computed term (always an array)
+    np.ndarray or dict
+        Computed term value(s)
     """
-    
-    if verbose:
-        logger.info(f"Computing term {term_name}...")
     
     if term_name not in TERMS:
         raise ValueError(f"Term '{term_name}' not found in TERMS")
@@ -165,7 +210,7 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
             # Convert to concrete components
             args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
             # Call calc_fourier for 1D data
-            result = term_obj.calc_fourier(*args, dic_param=dic_param, traj=True)
+            result = term_obj.calc_fourier(*args, dic_param=physical_param, traj=True)
             if type(result) != np.ndarray:
                 result = np.array(result)
         elif nbsatellite == 4:
@@ -176,7 +221,7 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
                 dic_param_sat = {}
                 for key, value in dic_quant.items():
                     dic_quant_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
-                for key, value in dic_param.items():
+                for key, value in physical_param.items():
                     dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
                 
                 # Convert abstract variables to concrete components for this satellite
@@ -195,45 +240,47 @@ def compute_term_from_TERMS(term_name, dic_quant, dic_param, nbsatellite=1, verb
             logger.error(f"Failed to compute {term_name}: {e}")
         raise
     
-    if verbose:
-        logger.info(f"Term {term_name} computed")
-    
     return result
 
 
-def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=None, nbsatellite=1, verbose=False):
+def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physical_param = None, laws=None, verbose=False):
     """
     Compute all terms required for the given laws.
-    Derived quantities are computed automatically before terms.
+    
+    Determines the set of terms needed from law specifications, then computes
+    them from the provided quantities. Accumulated per-trajectory if verbose=False.
     
     Parameters:
     -----------
-    dic_quant : dict
-        Dictionary of 1D or 3D data
-    dic_param : dict
-        Simulation parameters
+    dic_quantities : dict
+        Dictionary of 1D or 3D computed quantities
+    traj_param : dict
+        Trajectory parameters (nbsatellite, n_trajectories, etc.)
+    physical_param : dict
+        Physical parameters
     laws : list[str]
-        List of laws
-    nbsatellite : int
-        Number of satellites
+        List of law names to compute terms for
     verbose : bool
+        If True, logs detailed information (normally False to avoid spam)
     
     Returns:
     -------
-    dict : Dictionary of computed terms
+    dict : Dictionary of computed terms with multi-trajectory structure
     """
     
+    nbsatellite = traj_param.get('nbsatellite', 1)
+
     if laws is None:
         laws = []
     
     # Get required terms
-    required_terms = list_required_terms(laws, dic_param=dic_param)
+    required_terms = list_required_terms(laws, physical_param=physical_param, nbsatellite=nbsatellite)
     
     if verbose:
-        logger.info("\n" + "-"*70)
-        logger.info("FLUX AND SOURCE TERMS COMPUTATION ALONG TRAJECTORY")
-        logger.info(f"Computing {len(required_terms)} terms")
-        logger.info(f"Required terms: {required_terms}")
+        logging.info("\n" + "-"*70)
+        logging.info("FLUX AND SOURCE TERMS COMPUTATION")
+        logging.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
+        logging.info("-"*70)
     
     result = {}
     
@@ -241,38 +288,16 @@ def compute_all_terms_for_laws(dic_quantities = None, dic_param = None, laws=Non
         try:
             computed = compute_term_from_TERMS(term_name, 
                     dic_quantities, 
-                    dic_param, 
+                    physical_param=physical_param, 
                     nbsatellite=nbsatellite, 
-                    verbose=verbose)
+                    verbose=False)  # Disable per-term logs to avoid spam
             
             result[term_name] = computed
         except Exception as e:
             if verbose:
                 logger.error(f"Failed to compute {term_name}: {str(e)}")
     
+    if verbose:
+        logging.info(f"  [OK] All {len(result)} terms computed successfully")
+    
     return result
-
-def display_results(dic_terms, title="Results along trajectory"):
-    """
-    Display results of terms along a trajectory.
-    
-    Parameters:
-    -----------
-    dic_terms : dict
-        Dictionary of terms
-    title : str
-        Display title
-    """
-    logger.info(f"\n{title}")
-    logger.info("-" * 70)
-    
-    for key in sorted(dic_terms.keys()):
-        value = dic_terms[key]
-        if isinstance(value, np.ndarray) and value.ndim == 1:
-            logger.info(f"  {key:30s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
-        elif isinstance(value, np.ndarray):
-            logger.info(f"  {key:30s}: shape={value.shape} | mean={value.mean():12.6e}")
-        elif isinstance(value, (int, float, np.number)):
-            logger.info(f"  {key:30s}: {value:15.6e}")
-        else:
-            logger.info(f"  {key:30s}: {value}")

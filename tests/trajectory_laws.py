@@ -45,63 +45,88 @@ DIVERGENCE_REPLACEMENT_FACTORS = {
 }
 
 
-def get_divergence_factor_for_law(law_name):
+def _prepare_dic_param_for_terms_and_coeffs(dic_param, nbsatellite=1):
     """
-    Returns the divergence replacement factor for a given law.
-    This factor applies to ALL divergence terms of that law.
+    Prepare dic_param for terms_and_coeffs() by converting list-based parameters to scalars.
+    Same as in trajectory_terms.py
     
     Parameters:
     -----------
-    law_name : str
-        Name of the law
+    dic_param : dict
+        Dictionary with potentially list-based parameters (one value per trajectory)
+    nbsatellite : int
+        Number of satellites
     
     Returns:
     -------
-    float : Divergence factor (default 1.0)
+    dict : Cleaned dictionary with scalar parameters
     """
-    return DIVERGENCE_REPLACEMENT_FACTORS.get(law_name, 1.0)
+    params_clean = {}
+    
+    for key, value in dic_param.items():
+        if isinstance(value, list):
+            # Extract first element from list (same parameter for all trajectories)
+            params_clean[key] = value[0]
+        elif isinstance(value, dict):
+            # For nbsatellite=4, extract first satellite and first trajectory
+            if 'sat_0' in value:
+                first_sat_value = value['sat_0']
+                if isinstance(first_sat_value, list):
+                    params_clean[key] = first_sat_value[0]
+                else:
+                    params_clean[key] = first_sat_value
+            else:
+                params_clean[key] = value
+        else:
+            params_clean[key] = value
+    
+    return params_clean
 
 
-def apply_law_coefficients_1satellite(dic_terms, law_obj, law_name, dic_param, trajectory=None, verbose=False):
+def apply_law_coefficients_1satellite(dic_terms, law_obj, 
+                                      physical_param, 
+                                      traj_param,
+                                      verbose=False):
     """
-    Apply ONLY the divergence factor to the terms.
-    Law-specific coefficients are not applied here.
+    Apply law coefficients to computed terms.
+    
+    Handles multi-trajectory array structure by preserving dimensions
+    through all operations. Matches terms with coefficients and applies
+    convergence factors as needed.
     
     Parameters:
     -----------
-    dic_quantities : dict
-        Dictionary of computed base quantities
     dic_terms : dict
         Dictionary of computed terms
+        - nbsatellite=1: dict[term] -> array(n_trajectories, n_points)
+        - nbsatellite=4: dict[term] -> array(n_satellites, n_trajectories, n_points)
     law_obj : AbstractLaw
-        Law object
-    law_name : str
-        Name of the law
-    dic_param : dict
-        Simulation parameters
-    trajectory : np.ndarray, optional
-        Trajectory along which laws are computed
+        Law object containing terms_and_coeffs() method
+    physical_param : dict
+        Physical parameters
+    traj_param : dict
+        Trajectory parameters (nbsatellite, etc.)
     verbose : bool
+        If True, log detailed information about applied terms
     
     Returns:
     -------
-    dict : Dictionary of law terms with divergence factor applied
+    tuple : (result dict, coefficients dict)
     """
     
-    law_terms, coeffs = law_obj.terms_and_coeffs(dic_param)
+    # Clean parameters for terms_and_coeffs
+    params_clean = _prepare_dic_param_for_terms_and_coeffs(physical_param, traj_param.get('nbsatellite', 1))
+    law_terms, coeffs = law_obj.terms_and_coeffs(params_clean)
     result = {}
-    
-    # Get the common divergence factor for this law
-    div_factor = get_divergence_factor_for_law(law_name)
     
     # Get the list of flux terms of the law (those that will have a divergence)
     law_flux_terms = set(law_obj.terms) if hasattr(law_obj, 'terms') else set()
     
-    # Determine array size (from first computed term)
-    array_size = None
+    # Determine array shape (from first computed term)
+    array_shape = None
     for term_value in dic_terms.values():
         if isinstance(term_value, np.ndarray):
-            array_size = term_value.shape
+            array_shape = term_value.shape
             break
     
     incomputable_terms = []
@@ -122,95 +147,73 @@ def apply_law_coefficients_1satellite(dic_terms, law_obj, law_name, dic_param, t
             
             if base_term in dic_terms:
                 term_value = dic_terms[base_term]
-                # Apply the divergence factor (not the coefficient)
-                result[coeff_key] = divergence_1satellite(term_value, dic_param)
+                # Apply the divergence factor (term already contains divergence)
+                result[coeff_key] = divergence_1satellite(term_value, traj_param)
                 applied_terms.append(coeff_key)
-                if verbose and is_flux_term:
-                    logger.info(f"{coeff_key} (flux): div_factor={div_factor:.4f} applied")
             else:
                 incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
         
         elif is_source_term:
             # Source terms
-            # For sources: check if it's a gradient or divergence
-            has_gradient = any(keyword in coeff_key for keyword in ['drdr', 'dr2', 'dx', 'dy', 'dz'])
-            
-            if has_gradient:
-                # Source term with gradient/divergence: replace with factor array
-                if array_size is not None:
-                    # Create an array of same size filled with the factor
-                    result[coeff_key] = np.full(array_size, div_factor)
-                else:
-                    # Fallback: create a scalar
-                    result[coeff_key] = div_factor
+            if coeff_key in dic_terms:
+                term_value = dic_terms[coeff_key]
+                # Apply ONLY the divergence factor (vectorized)
+                result[coeff_key] = term_value
                 applied_terms.append(coeff_key)
-                if verbose:
-                    logger.info(f"{coeff_key} (source+grad): div_factor={div_factor:.4f} applied")
             else:
-                # Normal source without gradient
-                if coeff_key in dic_terms:
-                    term_value = dic_terms[coeff_key]
-                    # Apply ONLY the divergence factor
-                    result[coeff_key] = div_factor * term_value
-                    applied_terms.append(coeff_key)
-                    if verbose:
-                        logger.info(f"{coeff_key} (source): div_factor={div_factor:.4f} applied")
-                else:
-                    incomputable_terms.append((coeff_key, "term not computed"))
+                incomputable_terms.append((coeff_key, "term not computed"))
         
         else:
             # Simple term (no div_ or source_)
             if coeff_key in dic_terms:
                 term_value = dic_terms[coeff_key]
-                # Apply ONLY the divergence factor
-                result[coeff_key] = div_factor * term_value
+                # Apply ONLY the divergence factor (vectorized)
+                result[coeff_key] = term_value
                 applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, "term not computed"))
     
     if verbose:
-        if applied_terms:
-            logger.info(f"Applied terms ({len(applied_terms)}):")
-            for term in applied_terms:
-                logger.info(f"  {term}")
+        logging.info(f"  [OK] Matched {len(applied_terms)} terms")
         if incomputable_terms:
-            logger.info(f"Incomputable terms ({len(incomputable_terms)}):")
-            for term, reason in incomputable_terms:
-                logger.info(f"  {term}: {reason}")
+            logging.info(f"    [WARNING] {len(incomputable_terms)} terms could not be computed")
     
-    return result, coeffs  # Also return original coefficients
+    return result, coeffs
 
 
-def apply_law_coefficients_4satellites(dic_quantities, dic_terms, law_obj, law_name, dic_param, verbose=False):
-    # Work in progress: similar to 1 satellite but with handling for 4 satellites
-    return None
-
-def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsatellite=1, trajectory=None, verbose=False):
+def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_param=None,
+                                        laws=None, 
+                                        verbose=False):
     """
     Compute law terms with coefficients applied.
-    Returns a flat dictionary of law terms (div_flux_*, source_*, etc.).
     
-    Note: Since terms are identical for all laws (the divergence factor
-    is applied to all terms regardless of the law), terms are computed
-    only once for the first valid law.
+    Groups flux and source terms according to law specifications, applying
+    coefficients to determine the final contribution of each term to the law.
+    Handles multi-trajectory array structure consistently.
     
     Parameters:
     -----------
-    dic_quantities : dict
-        Dictionary of computed base quantities
     dic_terms : dict
-        Dictionary of computed base terms
-    dic_param : dict
-        Simulation parameters
+        Dictionary of computed terms with multi-trajectory structure
+    physical_param : dict
+        Physical parameters
+    traj_param : dict
+        Trajectory parameters (nbsatellite, etc.)
     laws : list[str]
-        List of laws
+        List of law names to process
     verbose : bool
+        If True, log detailed information per law
     
     Returns:
     -------
-    dict : Flat dictionary of law terms with coefficients {{term_key: value}}
+    tuple : (dic_law_terms dict, dic_coefficients dict)
     """
     
+    if verbose:
+        logging.info("\n" + "="*70)
+        logging.info(f"COMPUTING LAW TERMS WITH COEFFICIENTS")
+
+    nbsatellite = traj_param.get('nbsatellite', 1)
     if laws is None:
         laws = []
     
@@ -226,7 +229,7 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsate
             continue
         
         if verbose:
-            logger.info(f"Processing law: {law_name}")
+            logging.info(f"\n  Processing law: {law_name}")
         
         try:
             law_obj = LAWS[law_name]
@@ -236,22 +239,33 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsate
                 law_terms, law_coeffs = apply_law_coefficients_1satellite(
                     dic_terms, 
                     law_obj, 
-                    law_name, 
-                    dic_param, 
-                    trajectory=trajectory,
+                    physical_param,
+                    traj_param,
                     verbose=verbose
                 )
-                for term_key in law_terms.keys():
-                    law_terms[term_key] = np.roll(law_terms[term_key],shift=law_terms[term_key].shape[0]//2,axis=0)  # Shift to center the trajectory in the array
+                
+                # Apply roll shift to center trajectories on last axis (points only)
+                for term_key, term_array in law_terms.items():
+                    if isinstance(term_array, np.ndarray) and term_array.ndim >= 1:
+                        # Roll shift on last axis (points dimension)
+                        shift = term_array.shape[-1] // 2
+                        law_terms[term_key] = np.roll(term_array, shift=shift, axis=-1)
             
             elif nbsatellite == 4:
-                law_terms, law_coeffs = apply_law_coefficients_4satellites(
+                law_terms, law_coeffs = apply_law_coefficients_1satellite(
                     dic_terms,
                     law_obj,
-                    law_name,
-                    dic_param,
+                    physical_param,
+                    traj_param,
+                    nbsatellite=nbsatellite,
                     verbose=verbose
                 )
+                
+                # Apply roll shift to center on last axis for all satellites and trajectories
+                for term_key, term_array in law_terms.items():
+                    if isinstance(term_array, np.ndarray) and term_array.ndim >= 1:
+                        shift = term_array.shape[-1] // 2
+                        law_terms[term_key] = np.roll(term_array, shift=shift, axis=-1)
 
             # For the first law, store the terms (they will be identical for others)
             if not computed:
@@ -263,26 +277,44 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsate
                 dic_coefficients[f"{law_name}_{term_key}"] = coeff_value
             
             if verbose:
-                logger.info(f"Added {len(law_terms)} terms for {law_name}")
+                logging.info(f"  [OK] {len(law_terms)} terms added")
         
         except Exception as e:
             logger.error(f"Failed to process {law_name}: {e}")
     
     return dic_law_terms, dic_coefficients
 
-def laws_to_h5(dic_law_terms, dic_coefficients, filename="laws_terms.h5"):
+
+def laws_to_h5(dic_law_terms, dic_coefficients, traj_param, filename="laws_terms.h5"):
     """
     Save law terms and coefficients to an HDF5 file.
+    
+    Stores computed law terms and their associated coefficients for later analysis.
+    Only serializable trajectory parameters are saved to avoid data loss.
     
     Parameters:
     -----------
     dic_law_terms : dict
-        Flat dictionary of law terms {term_key: value}
+        Flat dictionary of computed law terms (fluxes and sources)
     dic_coefficients : dict
-        Dictionary of coefficients {law_term_key: coeff_value}
+        Dictionary of coefficients mapping term names to their numerical weights
+    traj_param : dict
+        Trajectory parameters (filtered for serializable types)
     filename : str
-        Output HDF5 filename
+        Output HDF5 filename (default: "laws_terms.h5")
     """
+    
+    def is_serializable(value):
+        """Check if value can be saved to HDF5"""
+        if value is None:
+            return False
+        if isinstance(value, (int, float, str, np.integer, np.floating)):
+            return True
+        if isinstance(value, np.ndarray) and value.ndim <= 2 and value.dtype != object:
+            return True
+        if isinstance(value, list) and all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in value):
+            return True
+        return False
     
     with h5py.File(filename, 'w') as f:
         # Save law terms
@@ -294,33 +326,14 @@ def laws_to_h5(dic_law_terms, dic_coefficients, filename="laws_terms.h5"):
         coeffs_group = f.create_group('coefficients')
         for coeff_key, coeff_value in dic_coefficients.items():
             coeffs_group.create_dataset(coeff_key, data=coeff_value)
+        
+        # Save only serializable trajectory parameters
+        traj_param_group = f.create_group('traj_param')
+        for param_key, param_value in traj_param.items():
+            if is_serializable(param_value):
+                try:
+                    traj_param_group.create_dataset(param_key, data=param_value)
+                except Exception as e:
+                    logger.warning(f"Could not save {param_key}: {e}")
     
-    logger.info(f"Saved law terms and coefficients to {filename}")
-
-def display_law_terms_results(dic_law_terms, title="Law Terms Results"):
-    """
-    Display law terms results along a trajectory.
-    
-    Parameters:
-    -----------
-    dic_law_terms : dict
-        Flat dictionary of law terms {term: array}
-    title : str
-        Display title
-    """
-    logger.info(f"\n{title}")
-    logger.info("-" * 70)
-    
-    for term_key in sorted(dic_law_terms.keys()):
-        value = dic_law_terms[term_key]
-        if isinstance(value, np.ndarray) and value.ndim == 1:
-            if value.size > 0:
-                logger.info(f"  {term_key:40s}: min={value.min():12.6e} | max={value.max():12.6e} | mean={value.mean():12.6e}")
-            else:
-                logger.info(f"  {term_key:40s}: empty array")
-        elif isinstance(value, np.ndarray):
-            logger.info(f"  {term_key:40s}: shape={value.shape} | mean={value.mean():12.6e}")
-        elif isinstance(value, (int, float, np.number)):
-            logger.info(f"  {term_key:40s}: {value:15.6e}")
-        else:
-            logger.info(f"  {term_key:40s}: {value}")
+    logging.info(f"  [OK] Saved {len(dic_law_terms)} law terms to {filename}")

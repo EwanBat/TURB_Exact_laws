@@ -2,13 +2,10 @@
 import numpy as np
 import logging
 from datetime import datetime
-from trajectory_preprocess import preprocess_trajectory_from_ini, trajectory_linear_x, trajectory_helical
-from trajectory_quantities import extract_trajectory_and_compute
+from trajectory_preprocess import preprocess_trajectory_from_ini
+from trajectory_quantities import extract_and_compute_trajectory_quantities
 from trajectory_terms import compute_all_terms_for_laws
 from trajectory_laws import compute_laws_terms_with_coefficients, laws_to_h5
-from visualisation_traj import see_trajectory_in_space, plot_laws_along_trajectory, comparison_glob_traj
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 import time
 
 # Configure logging with a better format
@@ -29,86 +26,65 @@ logging.info("PREPROCESSING TRAJECTORY")
 
 time_start = time.time()
 
-results = preprocess_trajectory_from_ini(
+config = preprocess_trajectory_from_ini(
     ini_file=config_file,
     verbose=True
 )
 
 # Extract results
-config = results['config']
-dic_datas = results['dic_datas']  # 1D extracted data
-dic_param = results['dic_param']
-trajectory = results['trajectory']
-trajectory_name = results['trajectory_name']
+dic_datas = config['dic_datas']  # 1D extracted data
+grid_param = config['grid_param']
+traj_param = config['traj_param']
+physical_param = config['physical_param']
 
 laws = config['laws']
 terms = config['terms']
 quantities = config['quantities']
-physical_params = config['physical_params']
-nbsatellite = config['nbsatellite']
 
-see_trajectory_in_space(dic_param, trajectory, nbsatellite)
+print(dic_datas.keys())
 
-dic_quantities = extract_trajectory_and_compute(
-    results['dic_datas'], 
-    dic_param=results['dic_param'],
+# see_trajectory_in_space(dic_param, trajectory, nbsatellite)
+
+dic_quantities = extract_and_compute_trajectory_quantities(
+    dic_datas, 
+    grid_param=grid_param,
+    traj_param=traj_param,
+    physical_param=physical_param,
     laws=laws,
-    nbsatellite=results['config']['nbsatellite'],
+    terms=terms,
+    quantities=quantities,
     verbose=True
 )
 
+print(dic_quantities.keys())
+
 # %% Compute quantities along trajectory
-if results['config']['nbsatellite'] == 1:
+if traj_param['nbsatellite'] == 1:
 
     dic_terms = compute_all_terms_for_laws(
         dic_quantities = dic_quantities, 
-        dic_param=results['dic_param'], 
-        laws=laws, 
-        nbsatellite=results['config']['nbsatellite'],
+        laws = laws,
+        physical_param = physical_param,
+        traj_param = traj_param,
         verbose=True)
 
+    print(dic_terms.keys())
+    
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
         laws=laws,
-        dic_param=results['dic_param'],
-        nbsatellite=results['config']['nbsatellite'],
-        trajectory=trajectory,
-        verbose=True
-    )
+        physical_param=physical_param,
+        traj_param=traj_param,
+        verbose=True)
 
-    laws_to_h5(dic_law_terms, dic_law_coeff, trajectory_name+"_laws.h5")
+    print(dic_law_terms.keys())
+    print(dic_law_coeff.keys())
+
+    laws_to_h5(dic_law_terms, dic_law_coeff, traj_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5")
 
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
 
-    plot_laws_along_trajectory(dic_param, laws, dic_law_coeff, dic_law_terms, trajectory_name)
+elif config['nbsatellite'] == 4:
 
-    if trajectory_name == "linear_x":
-        comparison_glob_traj(trajectory, dic_param, 
-                         traj_file = trajectory_name+"_laws.h5", 
-                         global_file = "OCA_CGL5_processed_PP98_reduc1.h5", 
-                         trajectory_name=trajectory_name)
-
-elif results['config']['nbsatellite'] == 4:
-
-    dic_terms = compute_all_terms_for_laws(
-        dic_quantities = dic_quantities, 
-        dic_param=results['dic_param'], 
-        laws=laws, 
-        nbsatellite=results['config']['nbsatellite'],
-        verbose=True)
-    
-    fig = plt.figure(figsize=(8, 6))
-    gs = GridSpec(2, 2, figure=fig)
-    for sat in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
-        ax = fig.add_subplot(gs[int(sat.split('_')[1])//2, int(sat.split('_')[1])%2])
-        for term in dic_terms.keys():
-            ax.plot(dic_param['lx'], dic_terms[term][sat], label=term)
-        ax.set_xlabel('lx [di]')
-        ax.set_ylabel(r'$epsilon_{PP98}$')
-        ax.set_title(f"{sat} - Cut at y=100, z=100")
-        ax.legend()
-            
-    plt.tight_layout()
-    plt.savefig(f"terms_trajectory_4sat_{trajectory_name}.png")
-
+    logging.warning("Computation for 4 satellites not implemented yet. Please set nbsatellite to 1 in the configuration.")

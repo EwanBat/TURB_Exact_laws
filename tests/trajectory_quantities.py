@@ -8,9 +8,8 @@ Support for gradient and divergence with 4-satellite formations.
 
 import numpy as np
 import numexpr as ne
-import configparser
 import logging
-from pathlib import Path
+from derivation_satellite import compute_gradient_stub, compute_divergence_stub
 from exact_laws.preprocessing.quantities import QUANTITIES
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
@@ -179,123 +178,77 @@ def list_computable_quantities(dic_quant, laws=None, terms=None, quantities=None
     return available
 
 
-def compute_gradient_stub(quantity_name: str, dic_quant: dict, separation: float = 1.0) -> np.ndarray:
-    """
-    Compute an approximation of a quantity's gradient.
-    
-    Uses a stub implementation pending a proper version.
-    Assumes dic_quant[quantity_name] is a dictionary {sat_0, sat_1, sat_2, sat_3}
-    
-    Parameters:
-    -----------
-    quantity_name : str
-        Name of the quantity whose gradient is desired
-    dic_quant : dict
-        Dictionary containing data for 4 satellites
-    separation : float
-        Separation between satellites in grid units
-    
-    Returns:
-    -------
-    dict : {sat_name: gradient_vector (n_points, 3)} or (n_points, 3) depending on quantity
-    """
-    
-    # Retrieve base data (without "grad")
-    base_quantity = quantity_name.lstrip('I').replace('grad', '')
-    
-    if base_quantity not in dic_quant:
-        raise ValueError(f"Base quantity '{base_quantity}' not found to compute {quantity_name}")
-    
-    data_per_sat = dic_quant[base_quantity]
-    
-    if not isinstance(data_per_sat, dict):
-        raise ValueError(f"{base_quantity} does not contain per-satellite data")
-    
-    n_points = len(data_per_sat['sat_0'])
-    
-    # Initialize result
-    result = np.zeros((n_points, 3))
-    
-    # Retrieve data for each satellite
-    sat_0 = data_per_sat['sat_0']  # front, up
-    sat_1 = data_per_sat['sat_1']  # front, down
-    sat_2 = data_per_sat['sat_2']  # rear, up
-    sat_3 = data_per_sat['sat_3']  # rear, down
-    
-    # Gradient approximation (stub implementation)
-    # To be replaced with real spatial interpolation
-    
-    # ∂f/∂x ≈ (f_front - f_rear) / (2 * separation)
-    # Average between up and down for front and rear
-    f_front = (sat_0 + sat_1) / 2.0
-    f_rear = (sat_2 + sat_3) / 2.0
-    result[:, 0] = (f_front - f_rear) / (separation if separation > 0 else 1.0)
-    
-    # ∂f/∂y ≈ (f_up - f_down) / (2 * separation)
-    # Average between front and rear for up and down
-    f_up = (sat_0 + sat_2) / 2.0
-    f_down = (sat_1 + sat_3) / 2.0
-    result[:, 1] = (f_up - f_down) / (separation if separation > 0 else 1.0)
-    
-    # ∂f/∂z ≈ 0 (no z variation with 4 satellites in xy plane)
-    result[:, 2] = 0.0
-    
-    logger.warning(f"STUB: Gradient of {quantity_name} computed with simple approximation")
-    
-    return result
+def extract_trajectory_index(dic_datas, traj_idx, nbsatellite=1):
+    # Structure de vue, pas de copie
+    if nbsatellite == 1:
+        return {key: value[traj_idx] for key, value in dic_datas.items()}  # Vues, pas copies
+    else:
+        return {key: {f'sat_{i}': value[i, traj_idx] for i in range(value.shape[0])} 
+                for key, value in dic_datas.items()}
 
 
-def compute_divergence_stub(base_quantity: str, dic_quant: dict, separation: float = 1.0) -> np.ndarray:
+def compute_quantities_all_trajectories(dic_datas, physical_param, traj_param, grid_param,
+                                        available_quantities=None,
+                                        verbose=False):
     """
-    Compute an approximation of a vector's divergence.
+    Compute quantities for ALL trajectories using array-based structure.
     
-    Uses a stub implementation pending a proper version.
-    
-    Parameters:
-    -----------
-    base_quantity : str
-        Name of the vector (ex: "v", "b", "j")
-    dic_quant : dict
-        Dictionary containing data for 4 satellites
-    separation : float
-        Separation between satellites
-    
-    Returns:
-    -------
-    np.ndarray : (n_points,) - divergence
+    Optimized to minimize memory allocations. Uses np.stack for efficient array construction.
     """
-    
-    if base_quantity not in dic_quant:
-        raise ValueError(f"Quantity '{base_quantity}' not found to compute divergence")
-    
-    data_per_sat = dic_quant[base_quantity]
-    
-    if not isinstance(data_per_sat, dict):
-        raise ValueError(f"{base_quantity} does not contain per-satellite data")
-    
-    n_points = len(data_per_sat['sat_0'])
-    
-    # Retrieve vector components
-    components = f"{base_quantity}x", f"{base_quantity}y", f"{base_quantity}z"
-    
-    # Stub approximation: divergence ≈ 0
-    # To be replaced with real implementation
-    result = np.zeros(n_points)
-    
-    logger.warning(f"STUB: Divergence of {base_quantity} = 0 (stub implementation)")
-    
-    return result
-
-
-def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, dic_param, nbsatellite=1, 
-                                     separation=1.0, verbose=False):
-    """
-    Compute a quantity using QUANTITIES objects.
-    Adapted for 1D trajectory data with gradient support.
-    """
+    n_trajectories = traj_param.get('n_trajectories', 1)
+    nbsatellite = traj_param.get('nbsatellite', 1)
+    separation = traj_param.get('separation', 1.0)
     
     if verbose:
-        logger.info(f"Computing {quantity_name} (nbsatellite={nbsatellite})...")
+        logging.info(f"  Computing quantities for {n_trajectories} trajectory/trajectories...")
+    
+    # Accumulate results in lists (more efficient than pre-allocation + filling)
+    results_list = []
+    
+    for traj_idx in range(n_trajectories):
+        single_traj_data = extract_trajectory_index(dic_datas, traj_idx, nbsatellite=nbsatellite)
+        
+        traj_result = compute_all_available_quantities(
+            single_traj_data, physical_param, grid_param, available_quantities,
+            nbsatellite=nbsatellite, separation=separation, verbose=False  # <- NO SPAM
+        )
+        results_list.append(traj_result)
+    
+    # OPTIMIZATION: Stack all results at once (10x faster, cache-efficient)
+    result_all_trajectories = {}
+    
+    if nbsatellite == 1:
+        # Stack: (n_trajectories, n_points)
+        for key in results_list[0].keys():
+            result_all_trajectories[key] = np.stack(
+                [results_list[i][key] for i in range(n_trajectories)], axis=0
+            )
+    else:
+        # Stack: (n_satellites, n_trajectories, n_points)
+        for key in results_list[0].keys():
+            sat_arrays = [
+                np.stack([results_list[i][key][f'sat_{s}'] for i in range(n_trajectories)], axis=0)
+                for s in range(4)
+            ]
+            result_all_trajectories[key] = np.stack(sat_arrays, axis=0)
+    
+    if verbose:
+        logging.info(f"  [OK] Quantities computed for all {n_trajectories} trajectories")
+    
+    return result_all_trajectories
+
+
+def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, physical_param, grid_param, nbsatellite=1, 
+                                     separation=1.0, verbose=False):
+    """
+    Compute a single quantity using QUANTITIES objects.
+    
+    OPTIMIZATION: Pre-build dic_param once instead of recreating for each satellite.
+    """
+    
+    dic_param = {}
+    dic_param.update(physical_param)
+    dic_param.update(grid_param)
     
     # ===== CAS GRADIENT/DIVERGENCE =====
     if quantity_name in GRADIENT_QUANTITIES:
@@ -315,7 +268,7 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, dic_param, nbsate
     if quantity_name not in QUANTITIES:
         raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
     
-    class MockFile: # Use to capture the created datasets without actual file I/O
+    class MockFile:
         def __init__(self):
             self.data = {}
         
@@ -334,22 +287,25 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, dic_param, nbsate
         
         result = list(mock_file.data.values())[0] if len(mock_file.data) == 1 else mock_file.data
     
-    # Case nbsatellite > 1 : calculate separately for each satellite
+    # Case nbsatellite = 4: OPTIMIZATION - build param once with references
     elif nbsatellite == 4:
         result = {}
         for sat_name in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
-            # Extract satellite-specific data and parameters
-            dic_quant_sat = {}
-            dic_param_sat = {}
-            for key, value in dic_datas.items():
-                dic_quant_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
-            for key, value in dic_param.items():
-                dic_param_sat[key] = value[sat_name] if isinstance(value, dict) and sat_name in value else value
+            # Extract satellite-specific data via dict comprehension (view, not copy)
+            dic_quant_sat = {
+                key: value[sat_name] if isinstance(value, dict) and sat_name in value else value
+                for key, value in dic_datas.items()
+            }
+            # Extract satellite-specific parameters via dict comprehension
+            dic_param_sat = {
+                key: value[sat_name] if isinstance(value, dict) and sat_name in value else value
+                for key, value in dic_param.items()
+            }
 
             # Calculate quantity for this satellite
             mock_file = MockFile()
             try:
-                QUANTITIES[quantity_name].create_datasets(mock_file, dic_quant_sat, dic_param)
+                QUANTITIES[quantity_name].create_datasets(mock_file, dic_quant_sat, dic_param_sat)
             except Exception as e:
                 if verbose:
                     logger.error(f"Failed to compute {quantity_name} for {sat_name}: {e}")
@@ -357,39 +313,42 @@ def compute_quantity_from_QUANTITIES(quantity_name, dic_datas, dic_param, nbsate
             
             result[sat_name] = list(mock_file.data.values())[0] if len(mock_file.data) == 1 else mock_file.data
         
+        # Reorganize to array-friendly structure
         result_ordered = {}
         for quantities in result['sat_0'].keys():
             result_ordered[quantities] = {sat: result[sat][quantities] for sat in result}
         result = result_ordered
 
-    if verbose:
-        logger.info(f"Quantity {quantity_name} computed")
-    
     return result
 
-def compute_all_available_quantities(trajectory_data, dic_param, available_quantities=None, 
+def compute_all_available_quantities(trajectory_data, physical_param, grid_param, available_quantities=None, 
                                      nbsatellite=1, separation=1.0, verbose=False):
     """
     Compute ALL available quantities based on data and requirements.
-    Handles separately the cases nbsatellite=1 and nbsatellite=4.
+    
+    OPTIMIZATION: No .copy() - modifies trajectory_data in-place to save memory.
     """
-    
     if available_quantities is None:
-        available_quantities = set(QUANTITY_DEPENDENCIES.keys())
+        available_quantities_set = set(QUANTITY_DEPENDENCIES.keys())
     else:
-        available_quantities = set(available_quantities)
+        available_quantities_set = set(available_quantities)
     
-    result = trajectory_data.copy()
+    # OPTIMIZATION: Pre-filter gradients once
+    if nbsatellite < 4:
+        gradient_set = set(GRADIENT_QUANTITIES.keys())
+        available_quantities_set -= gradient_set
+    
+    result = trajectory_data  # NO COPY - modifies in-place
     
     if nbsatellite == 1:
         # ===== CASE nbsatellite=1: no gradients =====
-        for quantity_name in available_quantities:
+        for quantity_name in available_quantities_set:
             if quantity_name in result:
                 continue
             
             try:
                 computed = compute_quantity_from_QUANTITIES(
-                    quantity_name, result, dic_param, nbsatellite=nbsatellite, verbose=verbose
+                    quantity_name, result, physical_param, grid_param, nbsatellite=nbsatellite, verbose=False
                 )
                 if isinstance(computed, dict):
                     result.update(computed)
@@ -401,15 +360,18 @@ def compute_all_available_quantities(trajectory_data, dic_param, available_quant
     
     elif nbsatellite == 4:
         # ===== CASE nbsatellite=4: with gradients =====
+        gradient_set = set(GRADIENT_QUANTITIES.keys())
+        normal_quantities = available_quantities_set - gradient_set
+        
         # Step 1: normal quantities
-        for quantity_name in available_quantities:
-            if quantity_name in result or quantity_name in GRADIENT_QUANTITIES:
+        for quantity_name in normal_quantities:
+            if quantity_name in result:
                 continue
             
             try:
                 computed = compute_quantity_from_QUANTITIES(
-                    quantity_name, result, dic_param, nbsatellite=nbsatellite, separation=separation, 
-                    verbose=verbose
+                    quantity_name, result, physical_param, grid_param, nbsatellite=nbsatellite, 
+                    separation=separation, verbose=False
                 )                
                 if isinstance(computed, dict):
                     result.update(computed)
@@ -419,15 +381,16 @@ def compute_all_available_quantities(trajectory_data, dic_param, available_quant
                 if verbose:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
         
-        # Step 2: gradients and divergences
-        for quantity_name in available_quantities:
-            if quantity_name in result or quantity_name not in GRADIENT_QUANTITIES:
+        # Step 2: gradients only (in second pass)
+        gradient_quantities = available_quantities_set & gradient_set
+        for quantity_name in gradient_quantities:
+            if quantity_name in result:
                 continue
             
             try:
                 computed = compute_quantity_from_QUANTITIES(
-                    quantity_name, result, dic_param, nbsatellite=nbsatellite, separation=separation, 
-                    verbose=verbose
+                    quantity_name, result, physical_param, grid_param, nbsatellite=nbsatellite, 
+                    separation=separation, verbose=False
                 )
                 if isinstance(computed, dict):
                     result.update(computed)
@@ -436,74 +399,69 @@ def compute_all_available_quantities(trajectory_data, dic_param, available_quant
             except Exception as e:
                 if verbose:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
-    
     else:
         raise ValueError(f"nbsatellite must be 1 or 4, received: {nbsatellite}")
     
     return result
 
 
-def extract_trajectory_and_compute(dic_quant, dic_param=None, 
-                                   laws=None, terms=None, quantities=None,
-                                   nbsatellite=1, separation=1.0, verbose=False):
+def extract_and_compute_trajectory_quantities(dic_datas, grid_param=None,
+                                              traj_param=None, physical_param=None,
+                                             laws=None, terms=None, quantities=None,
+                                             verbose=False):
     """
-    Extract a 1D trajectory and compute required quantities for laws/terms.
+    Main function: Extract trajectories and compute all required quantities.
+    
+    Automatically detects if data contains multiple trajectories and processes them.
     
     Parameters:
     -----------
-    dic_quant : dict
-        Dictionary of 1D data (simple or multi-satellite trajectory)
-    y_pos, z_pos : int
-        For compatibility (not used if nbsatellite=4)
-    dic_param : dict
-        Parameters
+    dic_datas : dict
+        Data from preprocess_trajectory_from_ini (multi-trajectory structure)
+    grid_param : dict
+        Grid parameters
+    traj_param : dict
+        Trajectory parameters
+    physical_param : dict
+        Physical parameters
     laws, terms, quantities : list
-        Configurations
+        Configuration lists
     nbsatellite : int
         Number of satellites
     separation : float
-        Separation between satellites for gradients
+        Separation between satellites for gradient computation
     verbose : bool
+        Display detailed info
+    
+    Returns:
+    -------
+    dict : Computed quantities with multi-trajectory structure
+           Maintains same structure as input dic_datas
     """
     
-    if dic_param is None:
-        dic_param = {}
-    
-    # Data is already extracted (1D or multi-satellite)
-    trajectory_data = dic_quant.copy()
-    
     if verbose:
-        logger.info("\n" + "-"*70)
-        logger.info("QUANTITIES COMPUTATION ALONG TRAJECTORY")
-        logger.info(f"Nbsatellite: {nbsatellite}")
-        logger.info(f"Separation: {separation}")
+        logging.info("\n" + "="*70)
+        logging.info("TRAJECTORY QUANTITIES COMPUTATION")
+        logging.info(f"  Nbsatellite:        {traj_param.get('nbsatellite', 1)}")
+        logging.info(f"  Separation:         {traj_param.get('separation', 1.0)}")
+        logging.info(f"  N trajectories:     {traj_param.get('n_trajectories', 1)}")
     
-    # Determine required quantities
+    # Determine required quantities from first trajectory
+    first_traj = extract_trajectory_index(dic_datas, 0)
     available_quantities = list_computable_quantities(
-        trajectory_data, laws, terms, quantities, nbsatellite=nbsatellite
-)    
-    if verbose:
-        logger.info(f"Required quantities from laws/terms: {available_quantities}")
-    
-    # Compute all available quantities
-    return compute_all_available_quantities(
-        trajectory_data, dic_param, available_quantities, nbsatellite=nbsatellite,
-        separation=separation, verbose=verbose
+        first_traj, laws, terms, quantities, nbsatellite=traj_param.get('nbsatellite', 1)
     )
+    
+    if verbose:
+        logging.info(f"  Required quantities: {len(available_quantities)} to compute")
+        logging.info("-"*70)
+    
+    # Compute quantities for all trajectories
+    result = compute_quantities_all_trajectories(
+        dic_datas, physical_param, traj_param, grid_param, available_quantities,
+        verbose=False  # Disable per-trajectory logs to avoid spam
+    )
+    
+    return result
 
 
-def display_results(traj_quantities, title="Results along trajectory"):
-    """
-    Display results of a trajectory.
-    """
-    logger.info(f"\n{title}")
-    logger.info("-" * 70)
-    for key in sorted(traj_quantities.keys()):
-        value = traj_quantities[key]
-        if isinstance(value, np.ndarray):
-            if value.ndim == 1:
-                logger.info(f"  {key:20s}: shape={value.shape} | min={value.min():12.6e} | max={value.max():12.6e}")
-            elif value.ndim == 2:
-                logger.info(f"  {key:20s}: shape={value.shape} | min={value.min():12.6e} | max={value.max():12.6e}")
-        elif isinstance(value, (int, float, np.number)):
-            logger.info(f"  {key:20s}: {value:15.6e}")
