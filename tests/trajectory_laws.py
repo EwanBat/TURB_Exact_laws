@@ -241,6 +241,8 @@ def compute_laws_terms_with_coefficients(dic_terms, dic_param, laws=None, nbsate
                     trajectory=trajectory,
                     verbose=verbose
                 )
+                for term_key in law_terms.keys():
+                    law_terms[term_key] = np.roll(law_terms[term_key],shift=law_terms[term_key].shape[0]//2,axis=0)  # Shift to center the trajectory in the array
             
             elif nbsatellite == 4:
                 law_terms, law_coeffs = apply_law_coefficients_4satellites(

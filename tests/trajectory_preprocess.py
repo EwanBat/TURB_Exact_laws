@@ -6,6 +6,7 @@ Support for custom trajectories - simple indexing in the cube.
 
 import logging
 import numpy as np
+from scipy.interpolate import Rbf
 import h5py
 import configparser
 from pathlib import Path
@@ -20,7 +21,7 @@ from exact_laws.preprocessing.process_on_oca_files import (
 # ========== TRAJECTORY DEFINITIONS ==========
 
 def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int, 
-                        N: np.ndarray) -> np.ndarray:
+                        N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
     Linear trajectory along the x axis (indices).
     
@@ -48,12 +49,11 @@ def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int,
     x = np.clip(x, 0, N[0]-1).astype(int)
     y = np.clip(y, 0, N[1]-1).astype(int)
     z = np.clip(z, 0, N[2]-1).astype(int)
-    
     return np.array([x, y, z]).T
 
 
 def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: int,
-                           N: np.ndarray) -> np.ndarray:
+                           N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
     Circular trajectory in the xy plane around a center (indices).
     
@@ -91,7 +91,7 @@ def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: 
 
 
 def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, center_z: int,
-                       N: np.ndarray) -> np.ndarray:
+                       N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
     Helical trajectory spiraling around a center (indices).
     
@@ -135,7 +135,7 @@ def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, ce
     return np.array([x, y, z]).T
 
 
-def trajectory_diagonal(t: np.ndarray, N: np.ndarray) -> np.ndarray:
+def trajectory_diagonal(t: np.ndarray, N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
     Diagonal trajectory through the cube.
     
@@ -145,7 +145,8 @@ def trajectory_diagonal(t: np.ndarray, N: np.ndarray) -> np.ndarray:
         Trajectory parameter (0 to N[0]-1)
     N : np.ndarray
         Grid dimensions
-    
+    Ninterp : int
+        Interpolation factor for grid dimensions
     Returns:
     -------
     np.ndarray
@@ -355,6 +356,32 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
     
     return trajectory_data
 
+def interpolation_along_trajectory(trajectory: np.ndarray, array_data: np.ndarray, dic_param: dict) -> dict:
+    """
+    Interpolate data along the trajectory.
+
+    Parameters:
+    -----------
+    trajectory : np.ndarray
+        Trajectory in indices (n_points, 3)
+    array_data : np.ndarray
+        Data to interpolate (3D array)
+    dic_param : dict
+        Dictionary containing simulation parameters
+
+    Returns:
+    -------
+    np.ndarray
+        Interpolated data along the trajectory (n_points,)
+    """
+    x, y, z = np.arange(dic_param['N'][0]), np.arange(dic_param['N'][1]), np.arange(dic_param['N'][2])
+    rbf_interpolator = Rbf(x, y, z, array_data, function='thin_plate')
+
+    # Interpolate along the trajectory
+    interpolated_values = rbf_interpolator(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2])
+    return interpolated_values
+
+
 def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict) -> dict:
     """
     Extract physical coordinates (x, y, z) along the trajectory from indices.
@@ -372,9 +399,9 @@ def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict
            {'x': (n_points,), 'y': (n_points,), 'z': (n_points,)}
     """
     
-    lx = dic_param['lx']
-    ly = dic_param['ly']
-    lz = dic_param['lz']
+    lx = dic_param['lx'] - dic_param['L'][0] / 2  # Centering coordinates around zero
+    ly = dic_param['ly'] - dic_param['L'][1] / 2
+    lz = dic_param['lz'] - dic_param['L'][2] / 2
     tangents = dic_param['tangents']
 
     ltraj = tangents[:, 0] * lx[trajectory[:, 0]] + tangents[:, 1] * ly[trajectory[:, 1]] + tangents[:, 2] * lz[trajectory[:, 2]]
@@ -382,7 +409,6 @@ def extract_coordinates_along_trajectory(trajectory: np.ndarray, dic_param: dict
 
 def compute_tangent_vectors_from_parameter(trajectory_func: Callable, 
                                            t_array: np.ndarray, 
-                                           N: np.ndarray, 
                                            dic_param: dict,
                                            **kwargs) -> np.ndarray:
     """
@@ -409,7 +435,8 @@ def compute_tangent_vectors_from_parameter(trajectory_func: Callable,
     n_points = len(t_array)
     dt = 1.0  # Index spacing
     tangents = np.zeros((n_points, 3))
-    
+    N = dic_param['N']
+
     lx = np.arange(dic_param['N'][0]) * dic_param['c'][0]
     ly = np.arange(dic_param['N'][1]) * dic_param['c'][1]
     lz = np.arange(dic_param['N'][2]) * dic_param['c'][2]
@@ -533,6 +560,7 @@ def preprocess_trajectory_from_ini(ini_file,
         di = config["PHYSICAL_PARAMS"].getfloat("di", 1.0)
         trajectory_method = config["RUN_PARAMS"].get("trajectory_method", "linear_x")
         trajectory_kwargs = eval(config["RUN_PARAMS"].get("trajectory_kwargs", "{}"))
+        Ninterp = config["RUN_PARAMS"].getint("Ninterp", 1)
     except Exception as e:
         logging.error(f"Error reading parameters: {e}")
         raise
@@ -583,8 +611,8 @@ def preprocess_trajectory_from_ini(ini_file,
         logging.info(f"  Number of satellites: {nbsatellite}")
     
     try:
-        t = np.arange(dic_param['N'][0])
-        trajectory = trajectory_func(t, N=dic_param['N'], **trajectory_kwargs)
+        t = np.arange(Ninterp * dic_param['N'][0]) / Ninterp  # Parameter for trajectory generation
+        trajectory = trajectory_func(t, N=dic_param['N'], Ninterp=Ninterp, **trajectory_kwargs)
     except Exception as e:
         logging.error(f"Error generating trajectory: {e}")
         raise
@@ -613,7 +641,7 @@ def preprocess_trajectory_from_ini(ini_file,
     )
 
     # Compute tangent vectors along the trajectory
-    compute_tangent_vectors_from_parameter(trajectory_func, t, dic_param['N'], dic_param, **trajectory_kwargs)
+    compute_tangent_vectors_from_parameter(trajectory_func, t, dic_param, Ninterp=Ninterp, **trajectory_kwargs)
     # Get physical coordinates along the trajectory
     extract_coordinates_along_trajectory(trajectory, dic_param) # Physical coordinates to dic_param
     
