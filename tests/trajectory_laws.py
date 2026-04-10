@@ -122,56 +122,42 @@ def apply_law_coefficients_1satellite(dic_terms, law_obj,
     # Get the list of flux terms of the law (those that will have a divergence)
     law_flux_terms = set(law_obj.terms) if hasattr(law_obj, 'terms') else set()
     
-    # Determine array shape (from first computed term)
-    array_shape = None
-    for term_value in dic_terms.values():
-        if isinstance(term_value, np.ndarray):
-            array_shape = term_value.shape
-            break
+    # PRE-FILTER coefficients by type (ONE-TIME, not per-iteration)
+    div_coeffs = {k: v for k, v in coeffs.items() if k.startswith('div_')}
+    source_coeffs = {k: v for k, v in coeffs.items() if k.startswith('source_')}
+    simple_coeffs = {k: v for k, v in coeffs.items() 
+                     if not k.startswith(('div_', 'source_'))}
     
     incomputable_terms = []
     applied_terms = []
     
-    for coeff_key, coeff_value in coeffs.items():
-        # Determine if it's a divergence term
-        is_divergence_term = coeff_key.startswith('div_')
-        is_source_term = coeff_key.startswith('source_')
-        
-        # Find the corresponding term
-        if is_divergence_term:
-            # For divergences: div_flux_X → flux_X
-            base_term = coeff_key.replace('div_', '')
-            
-            # Check if it's a flux term (listed in law_obj.terms)
-            is_flux_term = base_term in law_flux_terms
-            
-            if base_term in dic_terms:
-                term_value = dic_terms[base_term]
-                # Apply the divergence factor (term already contains divergence)
-                result[coeff_key] = divergence_1satellite(term_value, traj_param)
-                applied_terms.append(coeff_key)
-            else:
-                incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
-        
-        elif is_source_term:
-            # Source terms
-            if coeff_key in dic_terms:
-                term_value = dic_terms[coeff_key]
-                # Apply ONLY the divergence factor (vectorized)
-                result[coeff_key] = term_value
-                applied_terms.append(coeff_key)
-            else:
-                incomputable_terms.append((coeff_key, "term not computed"))
-        
+    # Process divergence terms
+    for coeff_key, coeff_value in div_coeffs.items():
+        base_term = coeff_key.replace('div_', '')
+        if base_term in dic_terms:
+            term_value = dic_terms[base_term]
+            result[coeff_key] = divergence_1satellite(term_value, traj_param)
+            applied_terms.append(coeff_key)
         else:
-            # Simple term (no div_ or source_)
-            if coeff_key in dic_terms:
-                term_value = dic_terms[coeff_key]
-                # Apply ONLY the divergence factor (vectorized)
-                result[coeff_key] = term_value
-                applied_terms.append(coeff_key)
-            else:
-                incomputable_terms.append((coeff_key, "term not computed"))
+            incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
+    
+    # Process source terms
+    for coeff_key, coeff_value in source_coeffs.items():
+        if coeff_key in dic_terms:
+            term_value = dic_terms[coeff_key]
+            result[coeff_key] = term_value
+            applied_terms.append(coeff_key)
+        else:
+            incomputable_terms.append((coeff_key, "term not computed"))
+    
+    # Process simple terms (no div_ or source_ prefix)
+    for coeff_key, coeff_value in simple_coeffs.items():
+        if coeff_key in dic_terms:
+            term_value = dic_terms[coeff_key]
+            result[coeff_key] = term_value
+            applied_terms.append(coeff_key)
+        else:
+            incomputable_terms.append((coeff_key, "term not computed"))
     
     if verbose:
         logging.info(f"  [OK] Matched {len(applied_terms)} terms")

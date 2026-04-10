@@ -155,19 +155,12 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     list : List of np.ndarray corresponding to concrete variables
     """
     concrete_data = []
-    
     for var in abstract_vars:
-        if var in VARIABLE_COMPONENTS:
-            components = VARIABLE_COMPONENTS[var]
-            for comp in components:
-                if comp not in dic_quant:
-                    raise ValueError(f"Component '{comp}' (from variable '{var}') not found in data")
-                concrete_data.append(dic_quant[comp])
-        else:
-            # Variable not in mapping, search directly
-            if var not in dic_quant:
-                raise ValueError(f"Variable '{var}' not found in data and not in VARIABLE_COMPONENTS mapping")
-            concrete_data.append(dic_quant[var])
+        components = VARIABLE_COMPONENTS.get(var, [var])  # Default to var itself
+        for comp in components:
+            if comp not in dic_quant:
+                raise ValueError(f"Component '{comp}' (from '{var}') not found")
+            concrete_data.append(dic_quant[comp])
     return concrete_data
 
 
@@ -212,7 +205,7 @@ def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1,
             # Call calc_fourier for 1D data
             result = term_obj.calc_fourier(*args, dic_param=physical_param, traj=True)
             if type(result) != np.ndarray:
-                result = np.array(result)
+                result = np.asarray(result)
         elif nbsatellite == 4:
             result = {}
             for sat_name in ['sat_0', 'sat_1', 'sat_2', 'sat_3']:
@@ -280,7 +273,6 @@ def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physica
         logging.info("\n" + "-"*70)
         logging.info("FLUX AND SOURCE TERMS COMPUTATION")
         logging.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
-        logging.info("-"*70)
     
     result = {}
     
@@ -299,5 +291,27 @@ def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physica
     
     if verbose:
         logging.info(f"  [OK] All {len(result)} terms computed successfully")
-    
+
     return result
+
+def terms_to_h5(result_terms, filename="terms_trajectory.h5"):
+    """
+    Save computed terms to an HDF5 file.
+    
+    Parameters:
+    -----------
+    result_terms : dict
+        Dictionary of computed terms (potentially with satellite sub-dictionaries)
+    filename : str
+        Output filename for the HDF5 file
+    """
+    import h5py
+    
+    with h5py.File(filename, 'w') as f:
+        for term_name, term_value in result_terms.items():
+            if isinstance(term_value, dict):  # Multiple satellites
+                group = f.create_group(term_name)
+                for sat_name, sat_value in term_value.items():
+                    group.create_dataset(sat_name, data=sat_value)
+            else:  # Single satellite
+                f.create_dataset(term_name, data=term_value)

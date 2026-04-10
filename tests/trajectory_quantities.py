@@ -454,7 +454,6 @@ def extract_and_compute_trajectory_quantities(dic_datas, grid_param=None,
     
     if verbose:
         logging.info(f"  Required quantities: {len(available_quantities)} to compute")
-        logging.info("-"*70)
     
     # Compute quantities for all trajectories
     result = compute_quantities_all_trajectories(

@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from trajectory_preprocess import preprocess_trajectory_from_ini
 from trajectory_quantities import extract_and_compute_trajectory_quantities
-from trajectory_terms import compute_all_terms_for_laws
+from trajectory_terms import compute_all_terms_for_laws, terms_to_h5
 from trajectory_laws import compute_laws_terms_with_coefficients, laws_to_h5
 import time
 
@@ -68,7 +68,7 @@ if traj_param['nbsatellite'] == 1:
         traj_param = traj_param,
         verbose=True)
 
-    print(dic_terms.keys())
+    terms_to_h5(dic_terms, traj_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5")
     
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
@@ -76,9 +76,6 @@ if traj_param['nbsatellite'] == 1:
         physical_param=physical_param,
         traj_param=traj_param,
         verbose=True)
-
-    print(dic_law_terms.keys())
-    print(dic_law_coeff.keys())
 
     laws_to_h5(dic_law_terms, dic_law_coeff, traj_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5")
 
