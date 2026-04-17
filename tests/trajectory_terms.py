@@ -164,7 +164,7 @@ def get_concrete_variables_from_abstract(abstract_vars, dic_quant):
     return concrete_data
 
 
-def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1, verbose=False):
+def compute_term_from_TERMS(term_name, dic_quant, physical_param, traj_param, nbsatellite=1, verbose=False, method=None):
     """
     Compute a single term using the calc_fourier method from TERMS.
     
@@ -179,6 +179,8 @@ def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1,
         Dictionary of 1D data (trajectory) with computed quantities
     physical_param : dict
         Physical parameters
+    traj_param : dict
+        Trajectory parameters
     nbsatellite : int
         Number of satellites (1 or 4)
     verbose : bool
@@ -203,7 +205,15 @@ def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1,
             # Convert to concrete components
             args = get_concrete_variables_from_abstract(abstract_vars, dic_quant)
             # Call calc_fourier for 1D data
-            result = term_obj.calc_fourier(*args, dic_param=physical_param, traj=True)
+            if method == "fourier":
+                result = term_obj.calc_fourier(*args, dic_param=physical_param, traj=True)
+            elif method == "incremental":
+                num_trajs = len(traj_param['trajectories_list'])
+                length_traj = len(traj_param['trajectories_list'][0])
+                args_array = np.array(args)
+                
+                result = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+
             if type(result) != np.ndarray:
                 result = np.asarray(result)
         elif nbsatellite == 4:
@@ -221,7 +231,15 @@ def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1,
                 args_sat = get_concrete_variables_from_abstract(abstract_vars, dic_quant_sat)
                 
                 # Compute term for this satellite
-                result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
+                if method == "fourier":
+                    result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
+                elif method == "incremental":
+                    num_trajs = len(traj_param['trajectories_list'])
+                    length_traj = len(traj_param['trajectories_list'][0])
+                    args_array = np.array(args_sat)
+                    
+                    result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+
                 if type(result_sat) != np.ndarray:
                     result_sat = np.array(result_sat)
                 result[sat_name] = result_sat
@@ -236,7 +254,7 @@ def compute_term_from_TERMS(term_name, dic_quant, physical_param, nbsatellite=1,
     return result
 
 
-def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physical_param = None, laws=None, verbose=False):
+def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physical_param = None, laws=None, method=None, verbose=False):
     """
     Compute all terms required for the given laws.
     
@@ -281,7 +299,9 @@ def compute_all_terms_for_laws(dic_quantities = None, traj_param = None, physica
             computed = compute_term_from_TERMS(term_name, 
                     dic_quantities, 
                     physical_param=physical_param, 
+                    traj_param=traj_param,
                     nbsatellite=nbsatellite, 
+                    method=method,
                     verbose=False)  # Disable per-term logs to avoid spam
             
             result[term_name] = computed

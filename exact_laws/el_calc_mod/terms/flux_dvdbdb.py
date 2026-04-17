@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
 
 class FluxDvdbdb(AbstractTerm):
     def __init__(self):
@@ -48,9 +48,12 @@ class FluxDvdbdb(AbstractTerm):
         self.expry = (dvx * dIbx + dvy * dIby + dvz * dIbz) * dIby
         self.exprz = (dvx * dIbx + dvy * dIby + dvz * dIbz) * dIbz
         
-    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, Ibx, Iby, Ibz, **kwarg) -> List[float]:
+    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, Ibx, Iby, Ibz, traj=False, **kwarg) -> List[float]:
         #return calc_flux_with_numba(calc_in_point, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
-        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
+        if traj:
+            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
+        else:
+            return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
     
     def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=traj)
@@ -97,6 +100,39 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         IbxNP, IbyNP, IbzNP
     )
     
+    return outx, outy, outz
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, 
+                                  vx , vy, vz, 
+                                  Ibx, Iby, Ibz,
+                                  fx=njit(FluxDvdbdb().fctx),
+                                  fy=njit(FluxDvdbdb().fcty),
+                                  fz=njit(FluxDvdbdb().fctz)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
+    IbxP, IbyP, IbzP = Ibx[tp], Iby[tp], Ibz[tp]
+    IbxNP, IbyNP, IbzNP = Ibx[t], Iby[t], Ibz[t]
+
+    outx = fx(
+        vxP, vyP, vzP,
+        vxNP, vyNP, vzNP,
+        IbxP, IbyP, IbzP,
+        IbxNP, IbyNP, IbzNP
+    )
+    outy = fy(
+        vxP, vyP, vzP,
+        vxNP, vyNP, vzNP,
+        IbxP, IbyP, IbzP,
+        IbxNP, IbyNP, IbzNP
+    )
+    outz = fz(
+        vxP, vyP, vzP,
+        vxNP, vyNP, vzNP,
+        IbxP, IbyP, IbzP,
+        IbxNP, IbyNP, IbzNP
+    )
     return outx, outy, outz
 
 @njit
@@ -161,4 +197,7 @@ def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=False):
                          - (np.conj(fbx)*fvxbz+np.conj(fby)*fvybz+np.conj(fbz)*fvzbz)
                          + (fvx*np.conj(fbxbz)+fvy*np.conj(fbybz)+fvz*np.conj(fbzbz))
                          - (np.conj(fvx)*fbxbz+np.conj(fvy)*fbybz+np.conj(fvz)*fbzbz))
+    
+    if traj:
+        return [flux_x/np.size(flux_x,axis=-1),flux_y/np.size(flux_y,axis=-1),flux_z/np.size(flux_z,axis=-1)]
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 

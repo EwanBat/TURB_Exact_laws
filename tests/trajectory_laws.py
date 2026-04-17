@@ -271,7 +271,7 @@ def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_pa
     return dic_law_terms, dic_coefficients
 
 
-def laws_to_h5(dic_law_terms, dic_coefficients, traj_param, filename="laws_terms.h5"):
+def laws_to_h5(dic_law_terms, dic_coefficients, filename="laws_terms.h5"):
     """
     Save law terms and coefficients to an HDF5 file.
     
@@ -290,18 +290,6 @@ def laws_to_h5(dic_law_terms, dic_coefficients, traj_param, filename="laws_terms
         Output HDF5 filename (default: "laws_terms.h5")
     """
     
-    def is_serializable(value):
-        """Check if value can be saved to HDF5"""
-        if value is None:
-            return False
-        if isinstance(value, (int, float, str, np.integer, np.floating)):
-            return True
-        if isinstance(value, np.ndarray) and value.ndim <= 2 and value.dtype != object:
-            return True
-        if isinstance(value, list) and all(isinstance(v, (int, float, str, np.integer, np.floating)) for v in value):
-            return True
-        return False
-    
     with h5py.File(filename, 'w') as f:
         # Save law terms
         law_terms_group = f.create_group('law_terms')
@@ -312,14 +300,5 @@ def laws_to_h5(dic_law_terms, dic_coefficients, traj_param, filename="laws_terms
         coeffs_group = f.create_group('coefficients')
         for coeff_key, coeff_value in dic_coefficients.items():
             coeffs_group.create_dataset(coeff_key, data=coeff_value)
-        
-        # Save only serializable trajectory parameters
-        traj_param_group = f.create_group('traj_param')
-        for param_key, param_value in traj_param.items():
-            if is_serializable(param_value):
-                try:
-                    traj_param_group.create_dataset(param_key, data=param_value)
-                except Exception as e:
-                    logger.warning(f"Could not save {param_key}: {e}")
     
     logging.info(f"  [OK] Saved {len(dic_law_terms)} law terms to {filename}")

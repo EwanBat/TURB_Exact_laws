@@ -37,10 +37,11 @@ grid_param = config['grid_param']
 traj_param = config['traj_param']
 physical_param = config['physical_param']
 
+
 laws = config['laws']
 terms = config['terms']
 quantities = config['quantities']
-
+method = config['method']
 print(dic_datas.keys())
 
 # see_trajectory_in_space(dic_param, trajectory, nbsatellite)
@@ -66,9 +67,10 @@ if traj_param['nbsatellite'] == 1:
         laws = laws,
         physical_param = physical_param,
         traj_param = traj_param,
+        method = method,
         verbose=True)
 
-    terms_to_h5(dic_terms, traj_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5")
+    terms_to_h5(dic_terms, filename=config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5")
     
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
@@ -77,7 +79,7 @@ if traj_param['nbsatellite'] == 1:
         traj_param=traj_param,
         verbose=True)
 
-    laws_to_h5(dic_law_terms, dic_law_coeff, traj_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5")
+    laws_to_h5(dic_law_terms, dic_law_coeff, filename=config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5")
 
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")

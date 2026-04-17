@@ -11,8 +11,4 @@ exact_laws/exact_laws_calc/laws/__pycache__/
 
 notebooks/
 
-visualisation.py
-
-visualisation_tools.py
-
-visualisation_traj.py
+visualisation/

@@ -227,6 +227,7 @@ def load_config_from_ini(config_file, input_folder: str = ""):
     
     # Load RUN_PARAMS section
     try:
+        method = config["RUN_PARAMS"].get("method", "fourier")
         nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", 1)
         gap_satellite = config["RUN_PARAMS"].getfloat("gap_satellite", 1)
         trajectory_method = config["RUN_PARAMS"].get("trajectory_method", "linear_x")
@@ -252,7 +253,7 @@ def load_config_from_ini(config_file, input_folder: str = ""):
         logging.error(f"Error reading di from PHYSICAL_PARAMS: {e}")
         di = 1.0
     
-    return (laws, terms, quantities, name_output, physical_param, trajectory_kwargs_list,
+    return (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
             nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
             trajectory_method, Ninterp, step_traj)
 
@@ -293,7 +294,7 @@ def preprocess_trajectory_from_ini(ini_file,
     
     # Load all configuration from INI file
     try:
-        (laws, terms, quantities, name_output, physical_param, trajectory_kwargs_list,
+        (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
          nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
          trajectory_method, Ninterp, step_traj) = load_config_from_ini(ini_file, input_folder)
     except Exception as e:
@@ -302,8 +303,7 @@ def preprocess_trajectory_from_ini(ini_file,
     
     if verbose:
         logging.info(f"  Laws:              {laws}")
-        logging.info(f"  Terms:             {terms}")
-        logging.info(f"  Quantities:        {quantities}")
+        logging.info(f"  Method:            {method}")
         logging.info(f"  Physical params:   {physical_param}")
         logging.info(f"  Nbsatellite:       {nbsatellite}")
         logging.info(f"  Gap satellite:     {gap_satellite}")
@@ -399,6 +399,7 @@ def preprocess_trajectory_from_ini(ini_file,
             'terms': terms,
             'quantities': quantities,
             'dic_datas': dic_datas,
+            'method': method,
             'grid_param': grid_param,
             'traj_param': traj_param,
             'physical_param': physical_param,

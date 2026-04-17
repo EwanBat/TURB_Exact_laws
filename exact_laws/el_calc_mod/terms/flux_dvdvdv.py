@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
 
 class FluxDvdvdv(AbstractTerm):
     def __init__(self):
@@ -40,8 +40,11 @@ class FluxDvdvdv(AbstractTerm):
         self.expry = (dvx * dvx + dvy * dvy + dvz * dvz) * dvy
         self.exprz = (dvx * dvx + dvy * dvy + dvz * dvz) * dvz
     
-    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, **kwarg) -> List[float]:
-        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz)
+    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz)
+        else:
+            return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz)
     
     def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, traj=traj)
@@ -74,6 +77,19 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     outy = fy(vxP, vyP, vzP, vxNP, vyNP, vzNP)
     outz = fz(vxP, vyP, vzP, vxNP, vyNP, vzNP)
     
+    return outx, outy, outz
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, vx, vy, vz,
+                                  fx=njit(FluxDvdvdv().fctx),
+                                  fy=njit(FluxDvdvdv().fcty),
+                                  fz=njit(FluxDvdvdv().fctz)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
+    outx = fx(vxP, vyP, vzP, vxNP, vyNP, vzNP)
+    outy = fy(vxP, vyP, vzP, vxNP, vyNP, vzNP)
+    outz = fz(vxP, vyP, vzP, vxNP, vyNP, vzNP)
     return outx, outy, outz
 
 @njit
@@ -112,5 +128,8 @@ def calc_with_fourier(vx, vy, vz, traj=False):
     flux_z = inv_transform(fvz*np.conj(fvxvx+fvyvy+fvzvz) - np.conj(fvz)*(fvxvx+fvyvy+fvzvz) 
                         + 2*(fvx*np.conj(fvxvz)+fvy*np.conj(fvyvz)+fvz*np.conj(fvzvz))
                         - 2*(np.conj(fvx)*fvxvz+np.conj(fvy)*fvyvz+np.conj(fvz)*fvzvz))
+    
+    if traj:
+        return [flux_x/np.size(flux_x,axis=-1),flux_y/np.size(flux_y,axis=-1),flux_z/np.size(flux_z,axis=-1)]
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 
 
