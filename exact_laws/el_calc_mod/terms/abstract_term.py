@@ -95,6 +95,7 @@ def calc_flux_with_numba(funct, dx, dy, dz, Nx, Ny, Nz, *quantities):
 
 @njit(parallel=True)
 def calc_source_with_numba_traj(funct, dl, Nt, *quantities):
+    acc = 0.0
 
     for t in prange(Nt):
         tp = t + dl - Nt * (t + dl >= Nt)

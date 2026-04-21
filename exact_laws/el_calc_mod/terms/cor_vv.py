@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class DissVinc(AbstractTerm):
     def __init__(self):
@@ -22,8 +22,10 @@ class DissVinc(AbstractTerm):
 
         self.expr =  (vxP-vxNP)*(vxP-vxNP) + (vyP-vyNP)*(vyP-vyNP) + (vzP-vzNP)*(vzP-vzNP) 
 
-    def calc(self, vector: List[int], cube_size: List[int],  vx, vy, vz,  **kwarg
+    def calc(self, vector: List[int], cube_size: List[int],  vx, vy, vz, traj=False, **kwarg
         ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, )
     
@@ -54,6 +56,16 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     vxP, vyP, vzP = vx[ip, jp, kp], vy[ip, jp, kp], vz[ip, jp, kp]
     vxNP, vyNP, vzNP = vx[i, j, k], vy[i, j, k], vz[i, j, k]
     
+    return f(vxP, vyP, vzP, vxNP, vyNP, vzNP)
+
+@njit
+def calc_in_point_with_sympy_traj(tp, t,
+                                  vx, vy, vz,
+                                  f=njit(DissVinc().fct)):
+    
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
     return f(vxP, vyP, vzP, vxNP, vyNP, vzNP)
 
 def calc_with_fourier(vx, vy, vz, traj=False):

@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
 
 class FluxDjbdrb(AbstractTerm):
     def __init__(self):
@@ -48,8 +48,11 @@ class FluxDjbdrb(AbstractTerm):
         self.expry = djbz * drbx - djbx * drbz
         self.exprz = djbx * drby - djby * drbx
     
-    def calc(self, vector:List[int], cube_size:List[int], rho, bx, by, bz, jx, jy, jz, **kwarg) -> List[float]:
-        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, bx, by, bz, jx, jy, jz)
+    def calc(self, vector:List[int], cube_size:List[int], rho, bx, by, bz, jx, jy, jz, traj=False,**kwarg) -> List[float]:
+        if traj:
+            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, bx, by, bz, jx, jy, jz)
+        else:
+            return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, bx, by, bz, jx, jy, jz)
 
     def calc_fourier(self, rho, bx, by, bz, jx, jy, jz, traj=False,**kwarg) -> List:
         return calc_with_fourier(rho, bx, by, bz, jx, jy, jz, traj=traj)
@@ -100,8 +103,39 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         jxP, jyP, jzP, jxNP, jyNP, jzNP)
     
     return outx, outy, outz
-    
-def calc_with_fourier(rho, bx, by, bz, jx, jy, jz, traj=False):    
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp,
+                                rho,
+                                bx, by, bz,
+                                jx, jy, jz,
+                                fx=njit(FluxDjbdrb().fctx),
+                                fy=njit(FluxDjbdrb().fcty),
+                                fz=njit(FluxDjbdrb().fctz)):
+    rhoP, rhoNP = rho[tp], rho[t]
+
+    jxP, jyP, jzP = jx[tp], jy[tp], jz[tp]
+    jxNP, jyNP, jzNP = jx[t], jy[t], jz[t]
+
+    bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+    bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+
+    outx = fx(
+        rhoP, rhoNP,
+        bxP, byP, bzP, bxNP, byNP, bzNP,
+        jxP, jyP, jzP, jxNP, jyNP, jzNP)
+    outy = fy(
+        rhoP, rhoNP,
+        bxP, byP, bzP, bxNP, byNP, bzNP,
+        jxP, jyP, jzP, jxNP, jyNP, jzNP)
+    outz = fz(
+        rhoP, rhoNP,
+        bxP, byP, bzP, bxNP, byNP, bzNP,
+        jxP, jyP, jzP, jxNP, jyNP, jzNP)
+    return outx, outy, outz
+
+def calc_with_fourier(rho, bx, by, bz, jx, jy,	jz,
+                      traj=False):
     transform = ft.fft(rho, traj=traj)
     inv_transform = ft.ifft(rho, traj=traj)
 

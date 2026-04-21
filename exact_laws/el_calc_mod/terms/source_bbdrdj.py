@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceBbdrdj(AbstractTerm):
@@ -36,10 +36,14 @@ class SourceBbdrdj(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int],
              rho,
              bx, by, bz,
-             divj, **kwarg) -> (float):
-        return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
-                                      rho, bx, by, bz, divj)
-    
+             divj, traj=False, **kwarg) -> (float):
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size,
+                                                 rho, bx, by, bz, divj)
+        else:
+            return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
+                                           rho, bx, by, bz, divj)
+
     def calc_fourier(self, rho, bx, by, bz, divj, traj=False, **kwarg) -> List:
         return calc_with_fourier(rho, bx, by, bz, divj, traj=traj)
 
@@ -65,6 +69,17 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     bxP, byP, bzP = bx[ip, jp, kp], by[ip, jp, kp], bz[ip, jp, kp]
     bxNP, byNP, bzNP = bx[i, j, k], by[i, j, k], bz[i, j, k]
     divjP, divjNP = divj[ip, jp, kp], divj[i, j, k]
+    
+    return f(rhoP, rhoNP, bxP, byP, bzP, bxNP, byNP, bzNP, divjP, divjNP)
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp,
+                                  rho, bx, by, bz, divj,  
+                                  f=njit(SourceBbdrdj().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+    bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+    divjP, divjNP = divj[tp], divj[t]
     
     return f(rhoP, rhoNP, bxP, byP, bzP, bxNP, byNP, bzNP, divjP, divjNP)
 

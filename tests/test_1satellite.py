@@ -2,7 +2,7 @@
 import numpy as np
 import logging
 from datetime import datetime
-from trajectory_preprocess import preprocess_trajectory_from_ini
+from trajectory_preprocess import preprocess_trajectory_from_ini, param_to_txt
 from trajectory_quantities import extract_and_compute_trajectory_quantities
 from trajectory_terms import compute_all_terms_for_laws, terms_to_h5
 from trajectory_laws import compute_laws_terms_with_coefficients, laws_to_h5
@@ -36,7 +36,7 @@ dic_datas = config['dic_datas']  # 1D extracted data
 grid_param = config['grid_param']
 traj_param = config['traj_param']
 physical_param = config['physical_param']
-
+param_to_txt(grid_param, traj_param, physical_param, filename=config['name_output'] + '_' + config['trajectory_name'] + "_parameters.txt")
 
 laws = config['laws']
 terms = config['terms']

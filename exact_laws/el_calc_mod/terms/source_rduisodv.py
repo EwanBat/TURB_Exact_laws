@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceRduisodv(AbstractTerm):
@@ -24,7 +24,9 @@ class SourceRduisodv(AbstractTerm):
         
         self.expr = rhoNP * (uisoP - uisoNP) * divvP
 
-    def calc(self, vector: List[int], cube_size: List[int], rho, uiso, divv, **kwarg) -> List[float]:
+    def calc(self, vector: List[int], cube_size: List[int], rho, uiso, divv, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, uiso, divv)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, uiso, divv)
 
     def calc_fourier(self, rho, uiso, divv, traj=False, **kwarg) -> List:
@@ -50,6 +52,13 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, uiso, divv,f=njit(SourceR
     rhoP, rhoNP = rho[ip, jp, kp], rho[i, j, k]
     uisoP, uisoNP = uiso[ip, jp, kp], uiso[i, j, k]
     divvP, divvNP = divv[ip, jp, kp], divv[i, j, k]
+    return f(rhoNP,uisoP,uisoNP,divvP) + f(rhoP,uisoNP,uisoP,divvNP)
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, rho, uiso, divv,f=njit(SourceRduisodv().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    uisoP, uisoNP = uiso[tp], uiso[t]
+    divvP, divvNP = divv[tp], divv[t]
     return f(rhoNP,uisoP,uisoNP,divvP) + f(rhoP,uisoNP,uisoP,divvNP)
 
 def calc_with_fourier(rho, uiso, divv, traj=False):

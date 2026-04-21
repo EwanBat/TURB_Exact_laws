@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class CorRu(AbstractTerm):
     def __init__(self):
@@ -24,8 +24,10 @@ class CorRu(AbstractTerm):
         self.expr =  (rhoP*uNP+rhoNP*uP)/2  
 
     def calc(
-        self, vector: List[int], cube_size: List[int], rho,  ugyr, **kwarg
+        self, vector: List[int], cube_size: List[int], rho,  ugyr, traj=False, **kwarg
     ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho,  ugyr)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho,  ugyr)
 
@@ -62,6 +64,18 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         uP, uNP
     )
     
+@njit
+def calc_in_point_with_sympy_traj(tp, t,
+                                  rho,
+                                    u,
+                                    f=njit(CorRu().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    uP, uNP = u[tp], u[t]
+
+    return f(rhoP, rhoNP,
+        uP, uNP
+    )
+
 def calc_with_fourier(rho, ugyr, traj=False):
 
     transform = ft.fft(rho, traj=traj)

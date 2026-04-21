@@ -38,6 +38,67 @@ def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int,
     z = np.clip(z, 0, N[2]-1).astype(int)
     return np.array([x, y, z]).T
 
+def trajectory_linear_y(t: np.ndarray, x_pos: int, z_pos: int,
+                        N: np.ndarray, Ninterp: int) -> np.ndarray:
+    """
+    Linear trajectory along the y axis (indices).
+    
+    Parameters:
+    -----------
+    t : np.ndarray
+        Trajectory parameter (0 to N[1]-1)
+    x_pos : int
+        Fixed position on x (index)
+    z_pos : int
+        Fixed position on z (index)
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+    
+    Returns:
+    -------
+    np.ndarray
+        Trajectory points (n_points, 3) with [x, y, z] indices
+    """
+    x = np.full_like(t, x_pos, dtype=int)
+    y = t
+    z = np.full_like(t, z_pos, dtype=int)
+    
+    # Clip to grid limits
+    x = np.clip(x, 0, N[0]-1).astype(int)
+    y = np.clip(y, 0, N[1]-1).astype(int)
+    z = np.clip(z, 0, N[2]-1).astype(int)
+    return np.array([x, y, z]).T
+
+def trajectory_linear_z(t: np.ndarray, x_pos: int, y_pos: int,
+                        N: np.ndarray, Ninterp: int) -> np.ndarray:
+    """
+    Linear trajectory along the z axis (indices).
+
+    Parameters:
+    -----------
+    t : np.ndarray
+        Trajectory parameter (0 to N[2]-1)
+    x_pos : int
+        Fixed position on x (index)
+    y_pos : int
+        Fixed position on y (index)
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+
+    Returns:
+    -------
+    np.ndarray
+        Trajectory points (n_points, 3) with [x, y, z] indices
+    """
+    x = np.full_like(t, x_pos, dtype=int)
+    y = np.full_like(t, y_pos, dtype=int)
+    z = t
+
+    # Clip to grid limits
+    x = np.clip(x, 0, N[0]-1).astype(int)
+    y = np.clip(y, 0, N[1]-1).astype(int)
+    z = np.clip(z, 0, N[2]-1).astype(int)
+    return np.array([x, y, z]).T
 
 def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: int,
                            N: np.ndarray, Ninterp: int) -> np.ndarray:
@@ -182,6 +243,63 @@ def generate_all_trajectory_kwargs_linear_x(N: np.ndarray, step: int) -> list:
     
     return trajectory_kwargs_list
 
+def generate_all_trajectory_kwargs_linear_y(N: np.ndarray, step: int) -> list:
+    """
+    Generate all possible trajectory_kwargs combinations for linear_y trajectory.
+    
+    Creates a trajectory for each (x_pos, z_pos) combination in the grid, covering
+    all possible positions perpendicular to the y-axis propagation.
+    
+    Parameters:
+    -----------
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+    step : int
+        Step size for trajectory generation
+    
+    Returns:
+    -------
+    list : List of dictionaries with all (x_pos, z_pos) combinations
+    """
+    trajectory_kwargs_list = []
+    
+    for x_pos in range(0, N[0], step):
+        for z_pos in range(0, N[2], step):
+            trajectory_kwargs_list.append({
+                'x_pos': int(x_pos),
+                'z_pos': int(z_pos)
+            })
+    
+    return trajectory_kwargs_list
+
+def generate_all_trajectory_kwargs_linear_z(N: np.ndarray, step: int) -> list:
+    """
+    Generate all possible trajectory_kwargs combinations for linear_z trajectory.
+    
+    Creates a trajectory for each (x_pos, y_pos) combination in the grid, covering
+    all possible positions perpendicular to the z-axis propagation.
+    
+    Parameters:
+    -----------
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+    step : int
+        Step size for trajectory generation
+    
+    Returns:
+    -------
+    list : List of dictionaries with all (x_pos, y_pos) combinations
+    """
+    trajectory_kwargs_list = []
+    
+    for x_pos in range(0, N[0], step):
+        for y_pos in range(0, N[1], step):
+            trajectory_kwargs_list.append({
+                'x_pos': int(x_pos),
+                'y_pos': int(y_pos)
+            })
+    
+    return trajectory_kwargs_list
 
 def _compute_trajectory_coordinates(trajectory: np.ndarray,
                                     grid_param: dict,

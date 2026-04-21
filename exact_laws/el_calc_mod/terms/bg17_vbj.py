@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class Bg17Vbj(AbstractTerm):
     def __init__(self):
@@ -40,8 +40,11 @@ class Bg17Vbj(AbstractTerm):
         self.expr = (vXbxP - vXbxNP) * djx + (vXbyP - vXbyNP) * djy + (vXbzP - vXbzNP) * djz
     
     def calc(
-        self, vector: List[int], cube_size: List[int], vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, **kwarg
+        self, vector: List[int], cube_size: List[int], vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=False, **kwarg
     ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(
+                calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=traj)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz)
     
@@ -82,7 +85,28 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         IbxP, IbyP, IbzP, IbxNP, IbyNP, IbzNP, 
         IjxP, IjyP, IjzP, IjxNP, IjyNP, IjzNP
     )
-    
+
+@njit
+def calc_in_point_with_sympy_traj(tp, t,
+                             vx, vy, vz,
+                             Ibx, Iby, Ibz,
+                             Ijx, Ijy, Ijz,
+                             f=njit(Bg17Vbj().fct)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
+    IbxP, IbyP, IbzP = Ibx[tp], Iby[tp], Ibz[tp]
+    IbxNP, IbyNP, IbzNP = Ibx[t], Iby[t], Ibz[t]
+
+    IjxP, IjyP, IjzP = Ijx[tp], Ijy[tp], Ijz[tp]
+    IjxNP, IjyNP, IjzNP = Ijx[t], Ijy[t], Ijz[t]
+
+    return f(
+        vxP, vyP, vzP, vxNP, vyNP, vzNP,
+        IbxP, IbyP, IbzP, IbxNP, IbyNP, IbzNP,
+        IjxP, IjyP, IjzP, IjxNP, IjyNP, IjzNP
+    )
+
 def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=False):
     transform = ft.fft(vx, traj=traj)
     inv_transform = ft.ifft(vx, traj=traj)

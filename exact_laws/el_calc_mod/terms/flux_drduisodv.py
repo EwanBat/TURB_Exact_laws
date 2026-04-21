@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
 
 class FluxDrduisodv(AbstractTerm):
     def __init__(self):
@@ -45,7 +45,9 @@ class FluxDrduisodv(AbstractTerm):
         self.expry = dr * duiso * dvy
         self.exprz = dr * duiso * dvz
     
-    def calc(self, vector:List[int], cube_size:List[int], rho, uiso, vx, vy, vz, **kwarg) -> List[float]:
+    def calc(self, vector:List[int], cube_size:List[int], rho, uiso, vx, vy, vz, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, uiso, vx, vy, vz)
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, uiso, vx, vy, vz)
 
     def calc_fourier(self, rho, uiso, vx, vy, vz, traj=False, **kwarg) -> List:
@@ -89,6 +91,32 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, uiso, vx, vy, vz,
         rhoP, rhoNP, uisoP, uisoNP,
         vxP, vyP, vzP, vxNP, vyNP, vzNP)
     
+    return outx, outy, outz
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, rho, uiso, vx, vy, vz,
+                                 fx=njit(FluxDrduisodv().fctx),
+                                 fy=njit(FluxDrduisodv().fcty),
+                                 fz=njit(FluxDrduisodv().fctz)):
+    rhoP, rhoNP = rho[tp], rho[t]
+
+    uisoP, uisoNP = uiso[tp], uiso[t]
+
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
+    outx = fx(
+        rhoP, rhoNP, uisoP, uisoNP,
+        vxP, vyP, vzP, vxNP, vyNP, vzNP)
+
+    outy = fy(
+        rhoP, rhoNP, uisoP, uisoNP,
+        vxP, vyP, vzP, vxNP, vyNP, vzNP)
+
+    outz = fz(
+        rhoP, rhoNP, uisoP, uisoNP,
+        vxP, vyP, vzP, vxNP, vyNP, vzNP)
+
     return outx, outy, outz
     
 def calc_with_fourier(rho, uiso, vx, vy, vz, traj=False):

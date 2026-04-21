@@ -19,11 +19,15 @@ from exact_laws.preprocessing.process_on_oca_files import (
 
 from tools_trajectory_preprocessing import (
     trajectory_linear_x,
+    trajectory_linear_y,
+    trajectory_linear_z,
     trajectory_circular_xy,
     trajectory_helical,
     trajectory_diagonal,
     combine_multiple_trajectories,
-    generate_all_trajectory_kwargs_linear_x
+    generate_all_trajectory_kwargs_linear_x,
+    generate_all_trajectory_kwargs_linear_y,
+    generate_all_trajectory_kwargs_linear_z,
 )
 
 # ========== UTILITY FUNCTIONS ==========
@@ -41,7 +45,7 @@ def setup_logging(config_name="trajectory_preprocess"):
 
 
 def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict, 
-                 output_file: str = "parameters_summary.txt"):
+                 filename: str = "parameters_summary.txt"):
     """
     Save grid, trajectory, and physical parameters to a JSON file (with .txt extension).
     Handles non-serializable objects (numpy arrays, functions) appropriately.
@@ -54,7 +58,7 @@ def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict,
         Trajectory parameters
     physical_param : dict
         Physical parameters
-    output_file : str
+    filename : str
         Output filename (default: "parameters_summary.txt")
     """
     
@@ -87,11 +91,11 @@ def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict,
     
     # Save to JSON file
     try:
-        with open(output_file, 'w') as f:
+        with open(filename, 'w') as f:
             json.dump(output_data, f, indent=4)
-        logging.info(f"Parameters saved to {output_file}")
+        logging.info(f"Parameters saved to {filename}")
     except Exception as e:
-        logging.error(f"Error saving parameters to {output_file}: {e}")
+        logging.error(f"Error saving parameters to {filename}: {e}")
         raise
 
 def load_oca_data(input_folder, cycle, sim_type):
@@ -336,6 +340,20 @@ def preprocess_trajectory_from_ini(ini_file,
             if verbose:
                 logging.info(f"  Generating ALL trajectory positions for linear_x...")
                 logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
+        elif trajectory_method == "linear_y":
+            trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_y(grid_param['N'], step_traj)
+            name_output += f"_all_step{step_traj}"
+            traj_param['step_traj'] = step_traj
+            if verbose:
+                logging.info(f"  Generating ALL trajectory positions for linear_y...")
+                logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
+        elif trajectory_method == "linear_z":
+            trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_z(grid_param['N'], step_traj)
+            name_output += f"_all_step{step_traj}"
+            traj_param['step_traj'] = step_traj
+            if verbose:
+                logging.info(f"  Generating ALL trajectory positions for linear_z...")
+                logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
         else:
             logging.warning(f"  'all' mode not yet implemented for {trajectory_method}, using default")
             trajectory_kwargs_list = [{}]
@@ -345,6 +363,10 @@ def preprocess_trajectory_from_ini(ini_file,
     # Select trajectory function based on configuration
     if trajectory_method == "linear_x":
         trajectory_func = trajectory_linear_x
+    elif trajectory_method == "linear_y":
+        trajectory_func = trajectory_linear_y
+    elif trajectory_method == "linear_z":
+        trajectory_func = trajectory_linear_z
     elif trajectory_method == "circular_xy":
         trajectory_func = trajectory_circular_xy
     elif trajectory_method == "helical":
@@ -390,9 +412,6 @@ def preprocess_trajectory_from_ini(ini_file,
     if verbose:
         logging.info(f"\n  [OK] Extraction complete: {len(dic_datas)} field quantities")
         logging.info(f"    Total trajectories processed: {len(trajectories_list)}")
-    
-    # Save parameters to file for later use
-    param_to_txt(grid_param, traj_param, physical_param)
 
     return {
             'laws': laws,

@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceRdpandv(AbstractTerm):
@@ -51,7 +51,11 @@ class SourceRdpandv(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int],
         rho, pperp, ppar, pm, bx, by, bz,
         dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz,
-        **kwarg) -> (float):
+        traj=False, **kwarg) -> (float):
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size,
+                rho, pperp, ppar, pm, bx, by, bz,
+                dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
             rho, pperp, ppar, pm, bx, by, bz,
         dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
@@ -95,6 +99,27 @@ def calc_in_point_with_sympy(
 
     return (f(rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxvxP, dxvyP, dxvzP,
                       dyvxP, dyvyP, dyvzP, dzvxP, dzvyP, dzvzP) 
+            + f(rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, bxNP, byNP, bzNP, bxP, byP, bzP, dxvxNP, dxvyNP, dxvzNP,
+                      dyvxNP, dyvyNP, dyvzNP, dzvxNP, dzvyNP, dzvzNP))
+
+@njit
+def calc_in_point_with_sympy_traj(
+    t, tp, rho, pperp, ppar, pm, bx, by, bz, dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz,
+    f=njit(SourceRdpandv().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    pperpP, pparP, pmP = pperp[tp], ppar[tp], pm[tp]
+    pperpNP, pparNP, pmNP = pperp[t], ppar[t], pm[t]
+    bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+    bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+    dxvxP, dxvyP, dxvzP = dxvx[tp], dxvy[tp], dxvz[tp]
+    dyvxP, dyvyP, dyvzP = dyvx[tp], dyvy[tp], dyvz[tp]
+    dzvxP, dzvyP, dzvzP = dzvx[tp], dzvy[tp], dzvz[tp]
+    dxvxNP, dxvyNP, dxvzNP = dxvx[t], dxvy[t], dxvz[t]
+    dyvxNP, dyvyNP, dyvzNP = dyvx[t], dyvy[t], dyvz[t]
+    dzvxNP, dzvyNP, dzvzNP = dzvx[t], dzvy[t], dzvz[t]
+
+    return (f(rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxvxP, dxvyP, dxvzP,
+                      dyvxP, dyvyP, dyvzP, dzvxP, dzvyP, dzvzP)
             + f(rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, bxNP, byNP, bzNP, bxP, byP, bzP, dxvxNP, dxvyNP, dxvzNP,
                       dyvxNP, dyvyNP, dyvzNP, dzvxNP, dzvyNP, dzvzNP))
 

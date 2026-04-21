@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceDpantr(AbstractTerm):
@@ -59,7 +59,14 @@ class SourceDpantr(AbstractTerm):
              dxvx, dyvx, dzvx,
              dxvy, dyvy, dzvy,
              dxvz, dyvz, dzvz,
-             **kwarg) -> (float):
+             traj=False, **kwarg) -> (float):
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size,
+                                      Ipperp, Ippar, Ipm,
+                                      Ibx, Iby, Ibz,
+                                      dxvx, dyvx, dzvx,
+                                      dxvy, dyvy, dzvy,
+                                      dxvz, dyvz, dzvz)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
                                       Ipperp, Ippar, Ipm,
                                       Ibx, Iby, Ibz,
@@ -119,6 +126,33 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
                dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP
             ))
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, 
+                     Ipperp, Ippar, Ipm,
+                     Ibx, Iby, Ibz,
+                     dxvx, dyvx, dzvx,
+                     dxvy, dyvy, dzvy,
+                     dxvz, dyvz, dzvz,  
+                     f=njit(SourceDpantr().fct)):
+    IpperpP, IpparP, IpmP = Ipperp[tp], Ippar[tp], Ipm[tp]
+    IpperpNP, IpparNP, IpmNP = Ipperp[t], Ippar[t], Ipm[t]
+    IbxP, IbyP, IbzP = Ibx[tp], Iby[tp], Ibz[tp]
+    IbxNP, IbyNP, IbzNP = Ibx[t], Iby[t], Ibz[t]
+    dxvxP, dyvxP, dzvxP = dxvx[tp], dyvx[tp], dzvx[tp]
+    dxvyP, dyvyP, dzvyP = dxvy[tp], dyvy[tp], dzvy[tp]
+    dxvzP, dyvzP, dzvzP = dxvz[tp], dyvz[tp], dzvz[tp]
+    dxvxNP, dyvxNP, dzvxNP = dxvx[t], dyvx[t], dzvx[t]
+    dxvyNP, dyvyNP, dzvyNP = dxvy[t], dyvy[t], dzvy[t]
+    dxvzNP, dyvzNP, dzvzNP = dxvz[t], dyvz[t], dzvz[t]
+
+    return (f(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+        dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
+        dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
+        + f(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
+        dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP
+        ))
                              
 def calc_with_fourier(Ipperp, Ippar, Ipm, Ibx, Iby, Ibz, dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=False):
     transform = ft.fft(Ipperp, traj=traj)

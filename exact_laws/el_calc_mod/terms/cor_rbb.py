@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class CorRbb(AbstractTerm):
     def __init__(self):
@@ -27,8 +27,10 @@ class CorRbb(AbstractTerm):
         self.expr = (rhoP+rhoNP)*psbb/2 /2  
 
     def calc(
-        self, vector: List[int], cube_size: List[int], rho, bx, by, bz, **kwarg
+        self, vector: List[int], cube_size: List[int], rho, bx, by, bz, traj=False, **kwarg
     ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, bx, by, bz)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho, bx, by, bz)
 
@@ -62,6 +64,21 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     
     rhoP, rhoNP = rho[ip, jp, kp], rho[i, j, k]
     
+    return f(rhoP, rhoNP,
+        bxP, byP, bzP, bxNP, byNP, bzNP
+    )
+
+@njit
+def calc_in_point_with_sympy_traj(tp, t,
+                                  rho,
+                                  bx, by, bz,
+                                  f=njit(CorRbb().fct)):
+    
+    bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+    bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+
+    rhoP, rhoNP = rho[tp], rho[t]
+
     return f(rhoP, rhoNP,
         bxP, byP, bzP, bxNP, byNP, bzNP
     )

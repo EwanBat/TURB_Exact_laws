@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceRvdpandr(AbstractTerm):
@@ -57,7 +57,9 @@ class SourceRvdpandr(AbstractTerm):
         self.expr = rhoNP / rhoP * dualprod  
 
     def calc(self, vector: List[int], cube_size: List[int],
-        rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, **kwarg) -> List[float]:
+        rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho
         )
@@ -94,6 +96,22 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, pperp, ppar, 
     dxrhoNP, dyrhoNP, dzrhoNP = dxrho[i, j, k], dyrho[i, j, k], dzrho[i, j, k]
 
     return (f(rhoP, rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, vxNP, vyNP, vzNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxrhoP, dyrhoP, dzrhoP) 
+            + f(rhoNP, rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, vxP, vyP, vzP, bxNP, byNP, bzNP, bxP, byP, bzP, dxrhoNP, dyrhoNP, dzrhoNP))
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, rho, vx, vy, vz, pperp, ppar, pm,
+                     bx, by, bz, dxrho, dyrho, dzrho, f=njit(SourceRvdpandr().fct)):
+        rhoP, rhoNP = rho[tp], rho[t]
+        pperpNP, pparNP, pmNP = pperp[t], ppar[t], pm[t]
+        pperpP, pparP, pmP = pperp[tp], ppar[tp], pm[tp]
+        vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+        vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+        bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+        bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+        dxrhoP, dyrhoP, dzrhoP = dxrho[tp], dyrho[tp], dzrho[tp]
+        dxrhoNP, dyrhoNP, dzrhoNP = dxrho[t], dyrho[t], dzrho[t]
+
+        return (f(rhoP, rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, vxNP, vyNP, vzNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxrhoP, dyrhoP, dzrhoP)
             + f(rhoNP, rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, vxP, vyP, vzP, bxNP, byNP, bzNP, bxP, byP, bzP, dxrhoNP, dyrhoNP, dzrhoNP))
 
 def calc_with_fourier(rho, vx, vy, vz, pperp, ppar, pm, bx, by, bz, dxrho, dyrho, dzrho, traj=False):

@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
 
 class FluxDrpmv2(AbstractTerm):
     def __init__(self):
@@ -38,7 +38,9 @@ class FluxDrpmv2(AbstractTerm):
         self.expry = rhoNP * pmP * vyP - rhoP * pmNP * vyNP
         self.exprz = rhoNP * pmP * vzP - rhoP * pmNP * vzNP
     
-    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, rho, pm, **kwarg) -> List[float]:
+    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, rho, pm, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz, rho, pm)
         return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, rho, pm)
 
     def calc_fourier(self, vx, vy, vz, rho, pm, traj=False, **kwarg) -> List:
@@ -73,6 +75,23 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     outy = fy(vxP, vyP, vzP, rhoP, pmP, vxNP, vyNP, vzNP, rhoNP, pmNP)
     outz = fz(vxP, vyP, vzP, rhoP, pmP, vxNP, vyNP, vzNP, rhoNP, pmNP)
     
+    return outx, outy, outz
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp,
+                             vx, vy, vz, rho, pm,
+                             fx=njit(FluxDrpmv2().fctx),
+                             fy=njit(FluxDrpmv2().fcty),
+                             fz=njit(FluxDrpmv2().fctz)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+    rhoP, rhoNP = rho[tp], rho[t]
+    pmP, pmNP = pm[tp], pm[t]
+
+    outx = fx(vxP, vyP, vzP, rhoP, pmP, vxNP, vyNP, vzNP, rhoNP, pmNP)
+    outy = fy(vxP, vyP, vzP, rhoP, pmP, vxNP, vyNP, vzNP, rhoNP, pmNP)
+    outz = fz(vxP, vyP, vzP, rhoP, pmP, vxNP, vyNP, vzNP, rhoNP, pmNP)
+
     return outx, outy, outz
 
 

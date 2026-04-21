@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceRvbetadrho(AbstractTerm):
@@ -26,7 +26,9 @@ class SourceRvbetadrho(AbstractTerm):
         
         self.expr = rhoNP/rhoP*pmP*(vxNP*dxrhoP+vyNP*dyrhoP+vzNP*dzrhoP)
         
-    def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, **kwarg) -> List[float]:
+    def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho)
 
     def calc_fourier(self, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=False, **kwarg) -> List:
@@ -59,6 +61,18 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp, rho, vx, vy, vz, pm,
     dxrhoNP, dyrhoNP, dzrhoNP = dxrho[i, j, k], dyrho[i, j, k], dzrho[i, j, k]
 
     return (f(rhoP, rhoNP, pmP, vxNP, vyNP, vzNP, dxrhoP, dyrhoP, dzrhoP) 
+            + f(rhoNP, rhoP, pmNP, vxP, vyP, vzP, dxrhoNP, dyrhoNP, dzrhoNP) )
+
+@njit
+def calc_in_point_with_sympy_traj(t, tp, rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, f=njit(SourceRvbetadrho().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    pmNP, pmP = pm[t], pm[tp]
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+    dxrhoP, dyrhoP, dzrhoP = dxrho[tp], dyrho[tp], dzrho[tp]
+    dxrhoNP, dyrhoNP, dzrhoNP = dxrho[t], dyrho[t], dzrho[t]
+
+    return (f(rhoP, rhoNP, pmP, vxNP, vyNP, vzNP, dxrhoP, dyrhoP, dzrhoP)
             + f(rhoNP, rhoP, pmNP, vxP, vyP, vzP, dxrhoNP, dyrhoNP, dzrhoNP) )
     
 def calc_with_fourier(rho, vx, vy, vz, pm, dxrho, dyrho, dzrho, traj=False):
