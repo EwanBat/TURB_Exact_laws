@@ -16,7 +16,7 @@ class PCgl:
         self.name = "I" * incompressible + "pcgl"
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         if self.incompressible:
             cstpar = np.mean(ne.evaluate(f"meanppar*(bx*bx+by*by+bz*bz)", local_dict=dic_quant, global_dict=dic_param))
             cstperp = np.mean(ne.evaluate(f"meanpperp/sqrt(bx*bx+by*by+bz*bz)", local_dict=dic_quant, global_dict=dic_param))

@@ -9,7 +9,7 @@ class Bnorm:
         self.name = 'I' * incompressible + 'bnorm'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         if self.incompressible:
             b = np.sqrt(dic_quant[f"bx"]*dic_quant[f"bx"] + 
                         dic_quant[f"by"]*dic_quant[f"by"] + 

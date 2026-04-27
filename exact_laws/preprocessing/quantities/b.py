@@ -14,7 +14,7 @@ class B:
         self.name = 'I' * incompressible + 'b'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list:list=None, nbsatellites:int=None):
         if self.incompressible:
             for axis in ('x', 'y', 'z'):
                 ds_name = f"{self.name}{axis}"

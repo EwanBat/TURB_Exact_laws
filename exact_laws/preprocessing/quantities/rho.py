@@ -6,7 +6,7 @@ class Rho:
         self.name = 'I' * incompressible + 'rho'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         ds_name = f"{self.name}"
         if self.incompressible:
             file.create_dataset(

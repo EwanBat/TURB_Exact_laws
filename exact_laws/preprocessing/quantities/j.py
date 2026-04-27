@@ -1,6 +1,7 @@
 import numpy as np
 
 from ...mathematical_tools import derivation
+from trajectories.derivation_satellite import curl_1satellite
 
 def get_original_quantity(dic_quant, dic_param, delete=False, inc=True):
     dic_quant['jx'], dic_quant['jy'], dic_quant['jz'] = derivation.rot(
@@ -25,30 +26,53 @@ class J:
         self.name = 'I' * incompressible + 'j'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
             
-        if self.incompressible:
-            if not ("jx" in dic_quant.keys() or "jy" in dic_quant.keys() or "jz" in dic_quant.keys()):
-                get_original_quantity(dic_quant, dic_param)
+        if traj:
+            if self.incompressible:
+                if nbsatellites == 1:
+                    j = curl_1satellite(
+                        np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
+                        ltraj_list
+                    )
+            else:
+                if nbsatellites == 1:
+                    j = curl_1satellite(
+                        np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
+                        ltraj_list
+                    )
+                    j = j / dic_quant["rho"]
             for axis in ('x', 'y', 'z'):
                 ds_name = f"{self.name}{axis}"
                 file.create_dataset(
                     ds_name,
-                    data = dic_quant[ds_name[1:]],
+                    data = j[['x', 'y', 'z'].index(axis)],
                     shape = dic_param["N"],
                     dtype = np.float64,
                 )
         else:
-            if not ("jcx" in dic_quant.keys() or "jcy" in dic_quant.keys() or "jcz" in dic_quant.keys()):
-                get_original_quantity(dic_quant, dic_param, inc=False)
-            for axis in ('x', 'y', 'z'):
-                ds_name = f"{self.name}{axis}"
-                file.create_dataset(
-                    ds_name,
-                    data = dic_quant[f'jc{axis}'],
-                    shape = dic_param["N"],
-                    dtype = np.float64,
-                )
+            if self.incompressible:
+                if not ("jx" in dic_quant.keys() or "jy" in dic_quant.keys() or "jz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param)
+                for axis in ('x', 'y', 'z'):
+                    ds_name = f"{self.name}{axis}"
+                    file.create_dataset(
+                        ds_name,
+                        data = dic_quant[ds_name[1:]],
+                        shape = dic_param["N"],
+                        dtype = np.float64,
+                    )
+            else:
+                if not ("jcx" in dic_quant.keys() or "jcy" in dic_quant.keys() or "jcz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param, inc=False)
+                for axis in ('x', 'y', 'z'):
+                    ds_name = f"{self.name}{axis}"
+                    file.create_dataset(
+                        ds_name,
+                        data = dic_quant[f'jc{axis}'],
+                        shape = dic_param["N"],
+                        dtype = np.float64,
+                    )
 
 
 def load(incompressible=False):

@@ -7,7 +7,7 @@ class UGyr:
         self.name = 'I' * incompressible + 'ugyr'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         if self.incompressible:
             raise NotImplementedError("")
         

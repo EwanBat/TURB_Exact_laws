@@ -7,7 +7,7 @@ class PPol:
         self.name = "I" * incompressible + "ppol"
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         if self.incompressible:
             ds_name = f"{self.name}"
             file.create_dataset(

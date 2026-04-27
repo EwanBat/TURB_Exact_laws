@@ -6,7 +6,7 @@ class V:
         self.name = 'I' * incompressible + 'v'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
         if self.incompressible:
             #doit modifier dic_quant
             raise NotImplementedError("")

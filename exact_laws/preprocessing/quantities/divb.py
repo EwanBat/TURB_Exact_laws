@@ -3,6 +3,7 @@ import numexpr as ne
 from .b import get_original_quantity
 
 from ...mathematical_tools import derivation
+from trajectories.derivation_satellite import divergence_1satellite
 
 
 class DivB:
@@ -10,23 +11,39 @@ class DivB:
         self.name = "I" * incompressible + "divb"
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param):
-        if self.incompressible:
-            divb = derivation.div(
-                [dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]], 
-                dic_param["c"], 
-                precision = 4, 
-                period = True
-            )
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+        if traj:
+            if self.incompressible:
+                if nbsatellites == 1:
+                    divb = divergence_1satellite(
+                        np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
+                        ltraj_list
+                    )
+            else:
+                if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param)
+                if nbsatellites == 1:
+                    divb = divergence_1satellite(
+                        np.array([dic_quant[f"vax"], dic_quant[f"vay"], dic_quant[f"vaz"]]),
+                        ltraj_list
+                    )
         else:
-            if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
-                get_original_quantity(dic_quant, dic_param)
-            divb = derivation.div(
-                [dic_quant[f"vax"], dic_quant[f"vay"], dic_quant[f"vaz"]],
-                dic_param["c"],
-                precision = 4,
-                period = True,
-            )
+            if self.incompressible:
+                divb = derivation.div(
+                    [dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]], 
+                    dic_param["c"], 
+                    precision = 4, 
+                    period = True
+                )
+            else:
+                if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param)
+                divb = derivation.div(
+                    [dic_quant[f"vax"], dic_quant[f"vay"], dic_quant[f"vaz"]],
+                    dic_param["c"],
+                    precision = 4,
+                    period = True,
+                )
         ds_name = f"{self.name}"
         file.create_dataset(
             ds_name,
