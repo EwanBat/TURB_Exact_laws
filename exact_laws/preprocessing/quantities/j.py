@@ -26,30 +26,34 @@ class J:
         self.name = 'I' * incompressible + 'j'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
             
         if traj:
             if self.incompressible:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     j = curl_1satellite(
                         np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
-                        ltraj_list
+                        traj_param
                     )
+                    for i,axis in enumerate(('x', 'y', 'z')):
+                        ds_name = f"{self.name}{axis}"
+                        file.create_dataset(
+                            ds_name,
+                            data=j[i]
+                        )
             else:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     j = curl_1satellite(
                         np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
-                        ltraj_list
+                        traj_param
                     )
                     j = j / dic_quant["rho"]
-            for axis in ('x', 'y', 'z'):
-                ds_name = f"{self.name}{axis}"
-                file.create_dataset(
-                    ds_name,
-                    data = j[['x', 'y', 'z'].index(axis)],
-                    shape = dic_param["N"],
-                    dtype = np.float64,
-                )
+                    for i,axis in enumerate(('x', 'y', 'z')):
+                        ds_name = f"{self.name}{axis}"
+                        file.create_dataset(
+                            ds_name,
+                            data=j[i]
+                        )
         else:
             if self.incompressible:
                 if not ("jx" in dic_quant.keys() or "jy" in dic_quant.keys() or "jz" in dic_quant.keys()):

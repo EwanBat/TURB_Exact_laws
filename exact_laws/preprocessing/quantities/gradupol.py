@@ -9,7 +9,7 @@ class GradUPol:
         self.name = 'I' * incompressible + 'gradupol'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         if self.incompressible:
             raise NotImplementedError("")
         
@@ -31,19 +31,17 @@ class GradUPol:
             upol = ne.evaluate("cst*log(rho)")
 
         if traj:
-            if nbsatellites == 1:
+            if traj_param.get('nbsatellites') == 1:
                 gradupol = gradient_1satellite(
                     upol,
-                    ltraj_list
+                    traj_param
                 )
-            for axisd in ('x', 'y', 'z'):
-                ds_name = f"gradupol{axisd}"
-                file.create_dataset(
-                    ds_name,
-                    data = gradupol[0],
-                    shape = dic_param["N"],
-                    dtype = np.float64,
-                )
+                for i,axisd in enumerate(('x', 'y', 'z')):
+                    ds_name = f"gradupol{axisd}"
+                    file.create_dataset(
+                        ds_name,
+                        data=gradupol[i]
+                    )
         else:
             dxupol, dyupol, dzupol = derivation.grad(
                 upol, 

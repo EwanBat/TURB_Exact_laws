@@ -11,21 +11,21 @@ class DivB:
         self.name = "I" * incompressible + "divb"
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         if traj:
             if self.incompressible:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     divb = divergence_1satellite(
                         np.array([dic_quant[f"bx"], dic_quant[f"by"], dic_quant[f"bz"]]),
-                        ltraj_list
+                        traj_param
                     )
             else:
                 if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
                     get_original_quantity(dic_quant, dic_param)
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     divb = divergence_1satellite(
                         np.array([dic_quant[f"vax"], dic_quant[f"vay"], dic_quant[f"vaz"]]),
-                        ltraj_list
+                        traj_param
                     )
         else:
             if self.incompressible:

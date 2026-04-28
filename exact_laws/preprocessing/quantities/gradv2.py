@@ -9,24 +9,22 @@ class GradV2:
         self.name = 'I' * incompressible + 'gradv2'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         inc = 'I' * self.incompressible
         v2 = dic_quant[f"{inc}vx"]*dic_quant[f"{inc}vx"] + dic_quant[f"{inc}vy"]*dic_quant[f"{inc}vy"] + dic_quant[f"{inc}vz"]*dic_quant[f"{inc}vz"]
         
         if traj:
-            if nbsatellites == 1:
+            if traj_param.get('nbsatellites') == 1:
                 gradv2 = gradient_1satellite(
                     np.array([v2]),
-                    ltraj_list
+                    traj_param
                 )
-            for axisd in ('x', 'y', 'z'):
-                ds_name = f"{inc}d{axisd}v2"
-                file.create_dataset(
-                    ds_name,
-                    data = gradv2[0],
-                    shape = dic_param["N"],
-                    dtype = np.float64,
-                )
+                for i,axisd in enumerate(('x', 'y', 'z')):
+                    ds_name = f"{inc}d{axisd}v2"
+                    file.create_dataset(
+                        ds_name,
+                        data=gradv2[i]
+                    )
         else:
             dxv2, dyv2, dzv2 = derivation.grad(v2, 
                 dic_param["c"], 

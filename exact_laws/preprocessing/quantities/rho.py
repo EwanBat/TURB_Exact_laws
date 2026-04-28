@@ -6,22 +6,30 @@ class Rho:
         self.name = 'I' * incompressible + 'rho'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         ds_name = f"{self.name}"
-        if self.incompressible:
-            file.create_dataset(
-                ds_name,
-                data=np.ones(dic_param["N"]),
-                shape=dic_param["N"],
-                dtype=np.float64,
-            )
+        if traj:
+            if self.incompressible:
+                # For trajectories, incompressible means rho=1 everywhere
+                sample_shape = next(iter(dic_quant.values())).shape if dic_quant else (1,)
+                file.create_dataset(ds_name, data=np.ones(sample_shape))
+            else:
+                file.create_dataset(ds_name, data=dic_quant[ds_name])
         else:
-            file.create_dataset(
-                ds_name,
-                data=dic_quant[ds_name],
-                shape=dic_param["N"],
-                dtype=np.float64,
-            )
+            if self.incompressible:
+                file.create_dataset(
+                    ds_name,
+                    data=np.ones(dic_param["N"]),
+                    shape=dic_param["N"],
+                    dtype=np.float64,
+                )
+            else:
+                file.create_dataset(
+                    ds_name,
+                    data=dic_quant[ds_name],
+                    shape=dic_param["N"],
+                    dtype=np.float64,
+                )
 
 
 def load(incompressible=False):

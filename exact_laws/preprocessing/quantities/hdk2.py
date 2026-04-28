@@ -7,7 +7,9 @@ class HdK:
         self.name = 'I' * incompressible + 'hdk2'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+        if traj:
+            raise NotImplementedError("HdK2 requires 3D grid spatial derivatives, not available for trajectories")
         
         for axisd in ('x', 'y', 'z'):
             hdk = dic_param["nu"] * -laplacien2(

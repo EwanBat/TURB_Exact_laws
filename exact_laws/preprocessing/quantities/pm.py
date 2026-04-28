@@ -7,25 +7,39 @@ class PM:
         self.name = 'I' * incompressible + 'pm'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
-        if self.incompressible:
-            ds_name = f"{self.name}"
-            file.create_dataset(
-                ds_name,
-                data = ne.evaluate("bx*bx/2+by*by/2+bz*bz/2", local_dict=dic_quant),
-                shape = dic_param["N"],
-                dtype = np.float64,
-            )
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+        if traj:
+            if self.incompressible:
+                file.create_dataset(
+                    f"{self.name}",
+                    data=ne.evaluate("bx*bx/2+by*by/2+bz*bz/2", local_dict=dic_quant)
+                )
+            else:
+                if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param)
+                file.create_dataset(
+                    f"{self.name}",
+                    data=ne.evaluate("(vax*vax+vay*vay+vaz*vaz)/2", local_dict=dic_quant)
+                )
         else:
-            if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
-                get_original_quantity(dic_quant, dic_param)
-            ds_name = f"{self.name}"
-            file.create_dataset(
-                ds_name,
-                data = ne.evaluate("(vax*vax+vay*vay+vaz*vaz)/2", local_dict=dic_quant),
-                shape = dic_param["N"],
-                dtype = np.float64,
-            )
+            if self.incompressible:
+                ds_name = f"{self.name}"
+                file.create_dataset(
+                    ds_name,
+                    data = ne.evaluate("bx*bx/2+by*by/2+bz*bz/2", local_dict=dic_quant),
+                    shape = dic_param["N"],
+                    dtype = np.float64,
+                )
+            else:
+                if not ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
+                    get_original_quantity(dic_quant, dic_param)
+                ds_name = f"{self.name}"
+                file.create_dataset(
+                    ds_name,
+                    data = ne.evaluate("(vax*vax+vay*vay+vaz*vaz)/2", local_dict=dic_quant),
+                    shape = dic_param["N"],
+                    dtype = np.float64,
+                )
 
 def load(incompressible=False):
     pm = PM(incompressible=incompressible)

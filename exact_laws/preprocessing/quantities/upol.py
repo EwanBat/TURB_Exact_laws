@@ -7,7 +7,7 @@ class UPol:
         self.name = 'I' * incompressible + 'upol'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         if self.incompressible:
             raise NotImplementedError("")
         
@@ -24,20 +24,42 @@ class UPol:
         rho = dic_quant['rho']
         ds_name = f"{self.name}"
         
-        if gamma != 1:
-            file.create_dataset(
-                ds_name,
-                data = ne.evaluate("cst/(gamma-1)*rho**(gamma-1)"),
-                shape = dic_param["N"],
-                dtype = np.float64,
-            )
-        else: 
-            file.create_dataset(
-                ds_name,
-                data = ne.evaluate("cst*log(rho)"),
-                shape = dic_param["N"],
-                dtype = np.float64,
-            )
+        if traj:
+            if gamma != 1:
+                cst_local = np.mean(
+                    ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant) / 
+                    ne.evaluate(f"rho**(gamma)", local_dict=dic_quant, global_dict=dic_param),
+                    axis=1
+                ).mean()
+                file.create_dataset(
+                    ds_name,
+                    data=ne.evaluate("cst_local/(gamma-1)*rho**(gamma-1)", local_dict={'cst_local': cst_local, 'gamma': gamma, 'rho': rho})
+                )
+            else:
+                cst_local = np.mean(
+                    ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant) / 
+                    ne.evaluate(f"rho**(gamma)", local_dict=dic_quant, global_dict=dic_param),
+                    axis=1
+                ).mean()
+                file.create_dataset(
+                    ds_name,
+                    data=ne.evaluate("cst_local*log(rho)", local_dict={'cst_local': cst_local, 'rho': rho})
+                )
+        else:
+            if gamma != 1:
+                file.create_dataset(
+                    ds_name,
+                    data = ne.evaluate("cst/(gamma-1)*rho**(gamma-1)"),
+                    shape = dic_param["N"],
+                    dtype = np.float64,
+                )
+            else: 
+                file.create_dataset(
+                    ds_name,
+                    data = ne.evaluate("cst*log(rho)"),
+                    shape = dic_param["N"],
+                    dtype = np.float64,
+                )
 
 def load(incompressible=False):
     upol = UPol(incompressible=incompressible)

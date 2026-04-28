@@ -8,17 +8,20 @@ class Vnorm:
         self.name = 'I' * incompressible + 'vnorm'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         inc = 'I' * self.incompressible
         v = np.sqrt(dic_quant[f"{inc}vx"]*dic_quant[f"{inc}vx"] + dic_quant[f"{inc}vy"]*dic_quant[f"{inc}vy"] + dic_quant[f"{inc}vz"]*dic_quant[f"{inc}vz"])
         
         ds_name = f"{self.name}"
-        file.create_dataset(
-            ds_name,
-            data = v,
-            shape = dic_param["N"],
-            dtype = np.float64,
-        )    
+        if traj:
+            file.create_dataset(ds_name, data=v)
+        else:
+            file.create_dataset(
+                ds_name,
+                data = v,
+                shape = dic_param["N"],
+                dtype = np.float64,
+            )    
         
 def load(incompressible=False):
     v = Vnorm(incompressible=incompressible)

@@ -8,17 +8,20 @@ class V2:
         self.name = 'I' * incompressible + 'v2'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         inc = 'I' * self.incompressible
         v2 = dic_quant[f"{inc}vx"]*dic_quant[f"{inc}vx"] + dic_quant[f"{inc}vy"]*dic_quant[f"{inc}vy"] + dic_quant[f"{inc}vz"]*dic_quant[f"{inc}vz"]
         
         ds_name = f"{self.name}"
-        file.create_dataset(
-            ds_name,
-            data = v2,
-            shape = dic_param["N"],
-            dtype = np.float64,
-        )    
+        if traj:
+            file.create_dataset(ds_name, data=v2)
+        else:
+            file.create_dataset(
+                ds_name,
+                data = v2,
+                shape = dic_param["N"],
+                dtype = np.float64,
+            )    
         
 def load(incompressible=False):
     v2 = V2(incompressible=incompressible)

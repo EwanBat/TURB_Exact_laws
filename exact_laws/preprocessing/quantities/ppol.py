@@ -7,34 +7,64 @@ class PPol:
         self.name = "I" * incompressible + "ppol"
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
-        if self.incompressible:
-            ds_name = f"{self.name}"
-            file.create_dataset(
-                ds_name,
-                data= np.mean(ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant)),
-                shape=dic_param["N"],
-                dtype=np.float64,
-            )
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+        if traj:
+            if self.incompressible:
+                ds_name = f"{self.name}"
+                # Average over grid points (axis=1) then over trajectories (axis=0) to get scalar
+                mean_val = np.mean(ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant), axis=1).mean()
+                file.create_dataset(
+                    ds_name,
+                    data=np.full_like(dic_quant['pperp'], mean_val)
+                )
+            else:
+                if not "gamma" in dic_param.keys():
+                    dic_param['gamma'] = 5/3
+                    gamma = 5/3
+                else: 
+                    gamma = dic_param['gamma']
+                if "cst" in dic_param.keys():
+                    cst = dic_param['cst']
+                else: 
+                    cst = np.mean(
+                        ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant) / 
+                        ne.evaluate(f"rho**(gamma)", local_dict=dic_quant, global_dict=dic_param),
+                        axis=1
+                    ).mean()
+                rho = dic_quant['rho']
+                ds_name = f"{self.name}"
+                file.create_dataset(
+                    ds_name,
+                    data=ne.evaluate("cst*rho**(gamma-1)", local_dict={'cst': cst, 'gamma': gamma, 'rho': rho})
+                )
         else:
-            if not "gamma" in dic_param.keys():
-                dic_param['gamma'] = 5/3
-                gamma = 5/3
-            else: 
-                gamma = dic_param['gamma']
-            if "cst" in dic_param.keys():
-                cst = dic_param['cst']
-            else: 
-                cst = (np.mean(ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant))
-                        / np.mean(ne.evaluate(f"rho**(gamma)", local_dict=dic_quant, global_dict=dic_param)))
-            rho = dic_quant['rho']
-            ds_name = f"{self.name}"
-            file.create_dataset(
-                ds_name,
-                data = ne.evaluate("cst*rho**(gamma-1)"),
-                shape = dic_param["N"],
-                dtype = np.float64,
-            )
+            if self.incompressible:
+                ds_name = f"{self.name}"
+                file.create_dataset(
+                    ds_name,
+                    data= np.mean(ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant)),
+                    shape=dic_param["N"],
+                    dtype=np.float64,
+                )
+            else:
+                if not "gamma" in dic_param.keys():
+                    dic_param['gamma'] = 5/3
+                    gamma = 5/3
+                else: 
+                    gamma = dic_param['gamma']
+                if "cst" in dic_param.keys():
+                    cst = dic_param['cst']
+                else: 
+                    cst = (np.mean(ne.evaluate(f"(ppar+pperp+pperp)/3", local_dict=dic_quant))
+                            / np.mean(ne.evaluate(f"rho**(gamma)", local_dict=dic_quant, global_dict=dic_param)))
+                rho = dic_quant['rho']
+                ds_name = f"{self.name}"
+                file.create_dataset(
+                    ds_name,
+                    data = ne.evaluate("cst*rho**(gamma-1)"),
+                    shape = dic_param["N"],
+                    dtype = np.float64,
+                )
 
 
 def load(incompressible=False):

@@ -7,7 +7,10 @@ class HdM:
         self.name = 'I' * incompressible + 'hdm'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+        if traj:
+            raise NotImplementedError("HdM requires 3D grid spatial derivatives, not available for trajectories")
+        
         for axisd in ('x', 'y', 'z'):
             if ("vax" in dic_quant.keys() or "vay" in dic_quant.keys() or "vaz" in dic_quant.keys()):
                 hdm = dic_param["eta"]/np.sqrt(dic_quant["rho"]) * -laplacien(

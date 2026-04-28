@@ -9,31 +9,29 @@ class GradRho:
         self.name = 'I' * incompressible + 'gradrho'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         if traj:
             if self.incompressible:
-                for axisd in ('x', 'y', 'z'):
+                # For incompressible flows, rho=1 so grad(rho)=0
+                rho_shape = dic_quant['rho'].shape if 'rho' in dic_quant else dic_quant[next(iter(dic_quant.keys()))].shape
+                for i,axisd in enumerate(('x', 'y', 'z')):
                     ds_name = f"Igradrho{axisd}"
                     file.create_dataset(
                         ds_name,
-                        data = np.zeros((len(ltraj_list),len(ltraj_list[0]))),
-                        shape = dic_param["N"],
-                        dtype = np.float64,
+                        data=np.zeros(rho_shape)
                     )
             else:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     gradrho = gradient_1satellite(
                         np.array([dic_quant[f"rho"]]),
-                        ltraj_list
+                        traj_param
                     )
-                for axisd in ('x', 'y', 'z'):
-                    ds_name = f"gradrho{axisd}"
-                    file.create_dataset(
-                        ds_name,
-                        data = gradrho[0],
-                        shape = dic_param["N"],
-                        dtype = np.float64,
-                    )
+                    for i,axisd in enumerate(('x', 'y', 'z')):
+                        ds_name = f"gradrho{axisd}"
+                        file.create_dataset(
+                            ds_name,
+                            data=gradrho[i]
+                        )
         else:
             if self.incompressible:
                 for axisd in ('x', 'y', 'z'):

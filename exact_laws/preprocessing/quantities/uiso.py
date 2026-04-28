@@ -7,17 +7,23 @@ class UIso:
         self.name = 'I' * incompressible + 'uiso'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         if self.incompressible:
             raise NotImplementedError("")
         
         ds_name = f"{self.name}"
-        file.create_dataset(
-            ds_name,
-            data = ne.evaluate("(ppar+pperp+pperp)/2/rho", local_dict=dic_quant),
-            shape = dic_param["N"],
-            dtype = np.float64,
-        )
+        if traj:
+            file.create_dataset(
+                ds_name,
+                data=ne.evaluate("(ppar+pperp+pperp)/2/rho", local_dict=dic_quant)
+            )
+        else:
+            file.create_dataset(
+                ds_name,
+                data = ne.evaluate("(ppar+pperp+pperp)/2/rho", local_dict=dic_quant),
+                shape = dic_param["N"],
+                dtype = np.float64,
+            )
 
 def load(incompressible=False):
     uiso = UIso(incompressible=incompressible)

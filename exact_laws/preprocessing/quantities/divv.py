@@ -9,20 +9,20 @@ class DivV:
         self.name = 'I' * incompressible + 'divv'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, ltraj_list: list = None, nbsatellites: int = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         inc = 'I' * self.incompressible
         if traj:
             if self.incompressible:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     divv = divergence_1satellite(
                         np.array([dic_quant[f"vx"], dic_quant[f"vy"], dic_quant[f"vz"]]),
-                        ltraj_list
+                        traj_param
                     )
             else:
-                if nbsatellites == 1:
+                if traj_param.get('nbsatellites') == 1:
                     divv = divergence_1satellite(
                         np.array([dic_quant[f"{inc}vx"], dic_quant[f"{inc}vy"], dic_quant[f"{inc}vz"]]),
-                        ltraj_list
+                        traj_param
                     )
         else:
             divv = derivation.div(
