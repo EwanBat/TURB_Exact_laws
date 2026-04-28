@@ -85,5 +85,7 @@ def calc_with_fourier(rho, ugyr, traj=False):
     fu = transform(ugyr)
     
     output = inv_transform(frho*np.conj(fu)+np.conj(frho)*fu)/2
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
 

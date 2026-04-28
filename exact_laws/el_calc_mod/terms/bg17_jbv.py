@@ -132,5 +132,6 @@ def calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, Ijx, Ijy, Ijz, traj=False):
                              + fjXby*np.conj(fvy) + np.conj(fjXby)*fvy 
                              + fjXbz*np.conj(fvz) + np.conj(fjXbz)*fvz)
     
-    
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)

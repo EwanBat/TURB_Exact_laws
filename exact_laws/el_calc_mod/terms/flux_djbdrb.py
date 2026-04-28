@@ -156,5 +156,7 @@ def calc_with_fourier(rho, bx, by, bz, jx, jy,	jz,
     flux_y = inv_transform((-np.conj(fjbz)*frbx+fjbz*np.conj(frbx))-(-np.conj(fjbx)*frbz+fjbx*np.conj(frbz)))/2
     flux_z = inv_transform((-np.conj(fjbx)*frby+fjbx*np.conj(frby))-(-np.conj(fjby)*frbx+fjby*np.conj(frbx)))/2
     
+    if traj:
+        return [flux_x/np.size(flux_x,axis=-1),flux_y/np.size(flux_y,axis=-1),flux_z/np.size(flux_z,axis=-1)]
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 
 

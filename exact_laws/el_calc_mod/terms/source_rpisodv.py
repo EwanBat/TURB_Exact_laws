@@ -70,5 +70,7 @@ def calc_with_fourier(rho, piso, divv, traj=False):
     fr = transform(rho)
     fpd = transform(piso*divv)
     output = inv_transform(np.conj(fr)*fpd + fr*np.conj(fpd))
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
 

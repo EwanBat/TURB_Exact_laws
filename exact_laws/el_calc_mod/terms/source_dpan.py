@@ -182,6 +182,8 @@ def calc_with_fourier(Ipperp, Ippar, Ipm, Ibx, Iby, Ibz, dxvx, dyvx, dzvx, dxvy,
     output = output + 2*np.sum((Ippar - Ipperp) / (2*Ipm) * (Ibx * Ibx * dxvx + Iby * Iby * dyvy + Ibz * Ibz * dzvz
                        +  Ibx * Iby * (dxvy + dyvx) +  Ibx * Ibz * (dxvz + dzvx) +  Iby * Ibz * (dzvy + dyvz)))
 
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
     
 

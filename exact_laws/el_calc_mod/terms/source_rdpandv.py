@@ -149,4 +149,6 @@ def calc_with_fourier(rho, pperp, ppar, pm, bx, by, bz,
                       + frpxy*np.conj(fdxy) + frpxz*np.conj(fdxz) + frpyz*np.conj(fdyz))
                    - (fdxx*np.conj(frpxx) + fdyy*np.conj(frpyy) + fdzz*np.conj(frpzz)
                        + fdxy*np.conj(frpxy) + fdxz*np.conj(frpxz) + fdyz*np.conj(frpyz)))
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)

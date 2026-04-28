@@ -95,4 +95,6 @@ def calc_with_fourier(rho, bx, by, bz, traj=False) -> List:
     output = ft.ifft(frhobx*np.conj(fbx) + frhoby*np.conj(fby) + frhobz*np.conj(fbz)
                     + np.conj(frhobx)*fbx + np.conj(frhoby)*fby + np.conj(frhobz)*fbz, traj=traj)/4
     
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)

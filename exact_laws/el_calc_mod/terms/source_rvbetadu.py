@@ -88,6 +88,9 @@ def calc_with_fourier(rho, vx, vy, vz, pm, piso,
     fpdy = transform(pm/piso*dyuiso)
     fpdz = transform(pm/piso*dzuiso)
     
+    if traj:
+        return inv_transform(frvx*np.conj(fpdx)+frvy*np.conj(fpdy)+frvz*np.conj(fpdz)
+                     +np.conj(frvx)*fpdx+np.conj(frvy)*fpdy+np.conj(frvz)*fpdz)
     return inv_transform(frvx*np.conj(fpdx)+frvy*np.conj(fpdy)+frvz*np.conj(fpdz)
                      +np.conj(frvx)*fpdx+np.conj(frvy)*fpdy+np.conj(frvz)*fpdz)
     

@@ -182,4 +182,6 @@ def calc_with_fourier(rho, vx, vy, vz, bx, by, bz, traj=False):
                         + (fbx*np.conj(frvxbz)+fby*np.conj(frvybz)+fbz*np.conj(frvzbz))
                         - (np.conj(fbx)*frvxbz+np.conj(fby)*frvybz+np.conj(fbz)*frvzbz))
     
+    if traj:
+        return [flux_x/np.size(flux_x,axis=-1),flux_y/np.size(flux_y,axis=-1),flux_z/np.size(flux_z,axis=-1)]
     return [flux_x/np.size(flux_x),flux_y/np.size(flux_y),flux_z/np.size(flux_z)] 

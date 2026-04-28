@@ -98,4 +98,7 @@ def calc_with_fourier(rho, vx, vy, vz, bx, by, bz, divb, traj=False):
     output = inv_transform(frvdx*np.conj(fbx)+frvdy*np.conj(fby)+frvdz*np.conj(fbz)
                      +np.conj(frvdx)*fbx+np.conj(frvdy)*fby+np.conj(frvdz)*fbz
                      -frvb*np.conj(fd)-np.conj(frvb)*fd)
+    
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
