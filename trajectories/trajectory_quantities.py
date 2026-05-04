@@ -206,6 +206,7 @@ class TrajectoryQuantitiesComputer:
         
         if self.verbose:
             logger.info(f"  [OK] All quantities computed successfully")
+            logger.info(result['sat_0'].keys())
         
         return result
     
@@ -249,7 +250,7 @@ class TrajectoryQuantitiesComputer:
         
         # STEP 2: Check availability
         all_dependencies = {**self.QUANTITY_DEPENDENCIES, **self.GRADIENT_QUANTITIES}
-        
+
         available = []
         for quantity_name in required_quantities:
             if quantity_name not in all_dependencies:
@@ -285,10 +286,6 @@ class TrajectoryQuantitiesComputer:
         
         for quantity_name in available_quantities:
             try:
-                if quantity_name in self.GRADIENT_QUANTITIES:
-                            raise NotImplementedError(
-                                f"Gradient {quantity_name} computation needs trajectory-specific implementation"
-                            )
                 if quantity_name not in self.QUANTITIES:
                     raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
                     
@@ -339,7 +336,7 @@ class TrajectoryQuantitiesComputer:
             # Use QUANTITIES to compute the quantity for vectorized data
             self.QUANTITIES[quantity_name].create_datasets(
                 mock_file, dic_quant_sat, self.dic_param, 
-                traj=True, ltraj_list=self.traj_param.get('ltraj_list', None), nbsatellites=self.nbsatellite
+                traj=True, traj_param=self.traj_param
             )
         except Exception as e:
             if self.verbose:

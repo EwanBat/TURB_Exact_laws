@@ -4,8 +4,8 @@ import logging
 from datetime import datetime
 from trajectories.trajectory_preprocess import preprocess_trajectory_from_ini, param_to_txt
 from trajectories.trajectory_quantities import extract_and_compute_trajectory_quantities
-from trajectories.trajectory_terms import compute_all_terms_for_laws, terms_to_h5
-from trajectories.trajectory_laws import compute_laws_terms_with_coefficients, laws_to_h5
+from trajectories.trajectory_terms import compute_all_terms_for_laws
+from trajectories.trajectory_laws import compute_laws_terms_with_coefficients
 import time
 
 # Configure logging with a better format
@@ -65,18 +65,17 @@ if traj_param['nbsatellite'] == 1:
         physical_param = physical_param,
         traj_param = traj_param,
         method = method,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5",
         verbose=True)
 
-    terms_to_h5(dic_terms, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5")
     
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
         laws=laws,
         physical_param=physical_param,
         traj_param=traj_param,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5",
         verbose=True)
-
-    laws_to_h5(dic_law_terms, dic_law_coeff, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5")
 
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")

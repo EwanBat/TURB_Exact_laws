@@ -327,10 +327,8 @@ def _compute_trajectory_coordinates(trajectory: np.ndarray,
     lx = np.arange(grid_param['N'][0]) * grid_param['c'][0] - grid_param['L'][0] / 2
     ly = np.arange(grid_param['N'][1]) * grid_param['c'][1] - grid_param['L'][1] / 2
     lz = np.arange(grid_param['N'][2]) * grid_param['c'][2] - grid_param['L'][2] / 2
-    
-    ltraj = tangents[:, 0] * lx[trajectory[:, 0]] + \
-            tangents[:, 1] * ly[trajectory[:, 1]] + \
-            tangents[:, 2] * lz[trajectory[:, 2]]
+
+    ltraj = tangents[:, 0] * lx[trajectory[:, 0]] + tangents[:, 1] * ly[trajectory[:, 1]] + tangents[:, 2] * lz[trajectory[:, 2]]
     
     return ltraj
 
@@ -401,20 +399,21 @@ def _compute_tangent_vectors(trajectory_func: Callable,
     
     all_traj = trajectory_func(t_array, N=N, Ninterp=Ninterp, **kwargs)  # Une seule fois
     tangents = np.zeros_like(all_traj, dtype=float)
-    tangents[0] = all_traj[1] - all_traj[0]  # Forward difference at start
-    tangents[-1] = all_traj[-1] - all_traj[-2]  # Backward difference at end
-    tangents[1:-1] = (all_traj[2:] - all_traj[:-2]) / 2  # Centered difference
-    
+    tangents[0,:] = all_traj[1,:] - all_traj[0,:]  # Forward difference at start
+    tangents[-1,:] = all_traj[-1,:] - all_traj[-2,:]  # Backward difference at end
+    tangents[1:-1,:] = (all_traj[2:,:] - all_traj[:-2,:]) / 2  # Centered difference
+
     # Normalize tangent vectors
-    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    norms = np.linalg.norm(tangents, axis=1)
     norms[norms == 0] = 1  # Avoid division by zero
-    tangents /= norms
+    tangents = tangents / norms[:,np.newaxis]
 
     return tangents
 
 
 def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray, 
-                                       nbsatellite: int = 1, gap_satellite: int = 2) -> dict:
+                                       traj_param: dict,
+                                       grid_param: dict) -> dict:
     """
     Extract quantities along one or multiple trajectories (indices).
     
@@ -424,17 +423,19 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
         Dictionary of 3D quantities
     trajectory : np.ndarray
         Central trajectory (n_points, 3) in indices
-    nbsatellite : int
-        Number of satellites (1 or 4)
-    gap_satellite : int
-        Gap between satellites in indices (used if nbsatellite=4)
-    
+    traj_param : dict
+        Number of satellites (1 or 4) and gap between satellites (if nbsatellite=4)
+    grid_param : dict
+        Grid parameters (N, L, c) for physical coordinate conversion
     Returns:
     -------
     dict : Data organized as {sat_name: {quantity_name: array(n_points,)}}
            Structure is uniform regardless of nbsatellite value
     """
     n_points = len(trajectory)
+    N = grid_param['N']
+    nbsatellite = traj_param['nbsatellite']
+    gap_satellite = traj_param.get('gap_satellite', 1)
     
     if nbsatellite == 1:
         # ===== SINGLE SATELLITE =====
@@ -459,8 +460,18 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
         # Generate 4 trajectories
         trajectories = {}
         for sat_name, offset in satellites.items():
-            traj = trajectory + offset
-            trajectories[sat_name] = np.clip(traj, 0, 255).astype(int)
+            traj = trajectory + offset[:, np.newaxis]  # Apply offset to trajectory
+            if traj_param.get('trajectory_method') == 'linear_x':
+                trajectories[sat_name] = np.clip(traj, 0, N[0]-1).astype(int)
+            elif traj_param.get('trajectory_method') == 'linear_y':
+                trajectories[sat_name] = np.clip(traj, 0, N[1]-1).astype(int)
+            elif traj_param.get('trajectory_method') == 'linear_z':
+                trajectories[sat_name] = np.clip(traj, 0, N[2]-1).astype(int)
+            
+            # Using periodic boundary conditions to wrap around the grid
+            trajectories[sat_name][0, :] = trajectories[sat_name][0, :] % N[0]
+            trajectories[sat_name][1, :] = trajectories[sat_name][1, :] % N[1]
+            trajectories[sat_name][2, :] = trajectories[sat_name][2, :] % N[2]
         
         # Extract data for each satellite - reorganized structure
         trajectory_data = {sat_name: {} for sat_name in satellites.keys()}
@@ -537,7 +548,12 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     
     for idx, trajectory_kwargs in enumerate(trajectory_kwargs_list):
         # Generate trajectory with interpolation
-        t = np.arange(Ninterp * N[0]) / Ninterp
+        if traj_param['trajectory_method'] == 'linear_x':
+            t = np.arange(Ninterp * N[0]) / Ninterp
+        elif traj_param['trajectory_method'] == 'linear_y':
+            t = np.arange(Ninterp * N[1]) / Ninterp
+        elif traj_param['trajectory_method'] == 'linear_z':
+            t = np.arange(Ninterp * N[2]) / Ninterp
         trajectory = trajectory_func(t, N=N, Ninterp=Ninterp, **trajectory_kwargs)
         trajectories_list.append(trajectory)
         n_points = len(trajectory)
@@ -553,8 +569,8 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         trajectory_data = extract_quantities_along_trajectory(
             dic_datas_3d,
             trajectory,
-            nbsatellite=nbsatellite,
-            gap_satellite=gap_satellite
+            traj_param,
+            grid_param,
         )
         trajectory_data_list.append(trajectory_data)
     
@@ -587,9 +603,9 @@ def combine_multiple_trajectories(trajectory_func: Callable,
                 dic_datas_combined[sat_name][var_name][traj_idx] = trajectory_data[sat_name][var_name]
     
     # Store trajectory metadata and geometry
-    traj_param['trajectories_list'] = trajectories_list
-    traj_param['tangents_list'] = tangents_list
-    traj_param['ltraj_list'] = ltraj_list
+    traj_param['trajectories_list'] = np.stack(trajectories_list)
+    traj_param['tangents_list'] = np.stack(tangents_list)
+    traj_param['ltraj_list'] = np.stack(ltraj_list)
     traj_param['n_trajectories'] = n_trajectories
     traj_param['n_points'] = n_points
     

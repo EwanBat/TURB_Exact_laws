@@ -29,6 +29,7 @@ class TrajectoryTermsComputer:
     # ========== CLASS CONSTANTS ==========
     
     # Mapping of abstract variables to their concrete components
+    # Based on actual datasets created by quantities module files
     VARIABLE_COMPONENTS = {
         # === Raw data ===
         'v': ['vx', 'vy', 'vz'],
@@ -43,16 +44,22 @@ class TrajectoryTermsComputer:
         # === Scalaires directs ===
         'rho': ['rho'],
         'Irho': ['Irho'],
+        'v2': ['v2'],  # v²
+        'Iv2': ['Iv2'],  # Incompressible v²
+        'vnorm': ['vnorm'],  # ||v||
+        'Ivnorm': ['Ivnorm'],  # Incompressible ||v||
+        'bnorm': ['bnorm'],  # ||b||
+        'Ibnorm': ['Ibnorm'],  # Incompressible ||b||
         'pm': ['pm'],  # Magnetic pressure
         'Ipm': ['Ipm'],  # Incompressible magnetic pressure
-        'pgyr': ['pgyr'],  # Gyrotropic pressure
-        'Ipgyr': ['Ipgyr'],  # Incompressible gyrotropic pressure
+        'pgyr': ['ppar', 'pperp'],  # Gyrotropic pressure
+        'Ipgyr': ['Ippar', 'Ipperp'],  # Incompressible gyrotropic pressure
         'piso': ['piso'],  # Isotropic pressure
         'Ipiso': ['Ipiso'],  # Incompressible isotropic pressure
         'ppol': ['ppol'],  # Poloidal pressure
         'Ippol': ['Ippol'],  # Incompressible poloidal pressure
-        'pcgl': ['pcgl'],  # CGL pressure
-        'Ipcgl': ['Ipcgl'],  # Incompressible CGL pressure
+        'pcgl': ['pparcgl', 'pperpcgl'],  # CGL pressure (parallel and perpendicular)
+        'Ipcgl': ['Ipparcgl', 'Ipperpcgl'],  # Incompressible CGL pressure
         'ugyr': ['ugyr'],  # Gyrotropic velocity
         'Iugyr': ['Iugyr'],  # Incompressible gyrotropic velocity
         'uiso': ['uiso'],  # Isotropic velocity
@@ -63,20 +70,30 @@ class TrajectoryTermsComputer:
         'Iucgl': ['Iucgl'],  # Incompressible CGL velocity
         
         # === Divergences ===
-        'divv': ['divvx', 'divvy', 'divvz'],  # Velocity divergence
-        'divb': ['divbx', 'divby', 'divbz'],  # Magnetic field divergence
-        'divj': ['divjx', 'divjy', 'divjz'],  # Current divergence
+        'divv': ['divv'],  # Velocity divergence (scalar)
+        'Idivv': ['Idivv'],  # Incompressible velocity divergence
+        'divb': ['divb'],  # Magnetic field divergence (scalar)
+        'Idivb': ['Idivb'],  # Incompressible magnetic divergence
+        'divj': ['divj'],  # Current divergence (scalar)
+        'Idivj': ['Idivj'],  # Incompressible current divergence
         
         # === Gradients ===
-        'gradrho': ['dxrho', 'dyrho', 'dzrho'],  # Density gradient
-        'gradv': ['grad_v_x', 'grad_v_y', 'grad_v_z'],  # Velocity gradient
-        'graduiso': ['grad_uiso_x', 'grad_uiso_y', 'grad_uiso_z'],  # Isotropic velocity gradient
-        'gradupol': ['grad_upol_x', 'grad_upol_y', 'grad_upol_z'],  # Poloidal velocity gradient
+        'gradrho': ['gradrhox', 'gradrhoy', 'gradrhoz'],  # Density gradient
+        'Igradrho': ['Igradrhox', 'Igradrhoy', 'Igradrhoz'],  # Incompressible density gradient
+        'gradv': ['dxvx', 'dyvx', 'dzvx', 'dxvy', 'dyvy', 'dzvy', 'dxvz', 'dyvz', 'dzvz'],  # Velocity gradient (3x3)
+        'Igradv': ['Idxvx', 'Idyvx', 'Idzvx', 'Idxvy', 'Idyvy', 'Idzvy', 'Idxvz', 'Idyvz', 'Idzvz'],  # Incompressible velocity gradient
+        'graduiso': ['graduisox', 'graduisoy', 'graduisoz'],  # Isotropic velocity gradient
+        'Igraduiso': ['Igraduisox', 'Igraduisoy', 'Igraduisoz'],  # Incompressible isotropic velocity gradient
+        'gradupol': ['gradupolx', 'gradupoly', 'gradupolz'],  # Poloidal velocity gradient
+        'Igradupol': ['Igradupolx', 'Igradupoly', 'Igradupolz'],  # Incompressible poloidal velocity gradient
         
         # === Hyperdissipation ===
         'hdk': ['hdkx', 'hdky', 'hdkz'],  # Kinetic hyperdissipation
+        'Ihdk': ['Ihdkx', 'Ihdky', 'Ihdkz'],  # Incompressible kinetic hyperdissipation
         'hdm': ['hdmx', 'hdmy', 'hdmz'],  # Magnetic hyperdissipation
+        'Ihdm': ['Ihdmx', 'Ihdmy', 'Ihdmz'],  # Incompressible magnetic hyperdissipation
         'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],  # Kinetic hyperdissipation order 2
+        'Ihdk2': ['Ihdk2x', 'Ihdk2y', 'Ihdk2z'],  # Incompressible kinetic hyperdissipation order 2
     }
     
     SATELLITE_NAMES = ['sat_0', 'sat_1', 'sat_2', 'sat_3']
@@ -206,7 +223,7 @@ class TrajectoryTermsComputer:
         
         return result
     
-    def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, method: str = None):
+    def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, method: str = None, filename: str = "terms_trajectory.h5"):
         """
         Compute all terms required for the given laws.
         
@@ -222,7 +239,8 @@ class TrajectoryTermsComputer:
             List of law names to compute terms for
         method : str
             Computation method ("fourier" or "incremental")
-        
+        filename : str
+            Output filename for the HDF5 file
         Returns:
         -------
         dict : Dictionary of computed terms with uniform structure:
@@ -259,6 +277,8 @@ class TrajectoryTermsComputer:
         if self.verbose:
             logging.info(f"  [OK] All {len(required_terms)} terms computed successfully:")
             logging.info(required_terms)
+        
+        self.terms_to_h5(result_terms=result, filename=filename)
 
         return result
     
@@ -371,7 +391,7 @@ class TrajectoryTermsComputer:
 
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, laws: list = None, method: str = None, verbose: bool = False):
+def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False):
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
@@ -380,13 +400,4 @@ def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = N
     computer = TrajectoryTermsComputer(verbose=verbose, 
                                       physical_param=physical_param, 
                                       traj_param=traj_param)
-    return computer.compute_all_terms_for_laws(dic_quantities, laws, method)
-
-def terms_to_h5(result_terms: dict, filename: str = "terms_trajectory.h5"):
-    """
-    Backward compatibility wrapper for terms_to_h5.
-    
-    Deprecated: Use TrajectoryTermsComputer.terms_to_h5 instead.
-    """
-    computer = TrajectoryTermsComputer()
-    computer.terms_to_h5(result_terms, filename)
+    return computer.compute_all_terms_for_laws(dic_quantities, laws, method, filename)

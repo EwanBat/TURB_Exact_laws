@@ -179,11 +179,15 @@ def calc_with_fourier(Ipperp, Ippar, Ipm, Ibx, Iby, Ibz, dxvx, dyvx, dzvx, dxvy,
                       + fpbbyy*np.conj(fdyy) + fpbbyz*np.conj(fdyz) + fpbbzz*np.conj(fdzz)
                       + np.conj(fpbbxx)*fdxx + np.conj(fpbbxy)*fdxy + np.conj(fpbbxz)*fdxz
                       + np.conj(fpbbyy)*fdyy + np.conj(fpbbyz)*fdyz + np.conj(fpbbzz)*fdzz) 
+    
+    if traj:
+        output = output + 2*np.sum((Ippar - Ipperp) / (2*Ipm) * (Ibx * Ibx * dxvx + Iby * Iby * dyvy + Ibz * Ibz * dzvz
+                       +  Ibx * Iby * (dxvy + dyvx) +  Ibx * Ibz * (dxvz + dzvx) +  Iby * Ibz * (dzvy + dyvz)), axis=-1)[:,np.newaxis]
+
+        return output/np.size(output,axis=-1)
+    
     output = output + 2*np.sum((Ippar - Ipperp) / (2*Ipm) * (Ibx * Ibx * dxvx + Iby * Iby * dyvy + Ibz * Ibz * dzvz
                        +  Ibx * Iby * (dxvy + dyvx) +  Ibx * Ibz * (dxvz + dzvx) +  Iby * Ibz * (dzvy + dyvz)))
-
-    if traj:
-        return output/np.size(output,axis=-1)
     return output/np.size(output)
     
 
