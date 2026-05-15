@@ -8,6 +8,8 @@ from trajectories.trajectory_terms import compute_all_terms_for_laws
 from trajectories.trajectory_laws import compute_laws_terms_with_coefficients
 import time
 
+time_start = time.time()
+
 # Configure logging with a better format
 log_filename = f"test_1satellite_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
 logging.basicConfig(
@@ -24,8 +26,6 @@ config_file = "trajectories/traj_satellite.ini"
 logging.info("\n" + "="*70)
 logging.info("PREPROCESSING TRAJECTORY")
 
-time_start = time.time()
-
 config = preprocess_trajectory_from_ini(
     ini_file=config_file,
     verbose=True
@@ -37,6 +37,7 @@ grid_param = config['grid_param']
 traj_param = config['traj_param']
 physical_param = config['physical_param']
 param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_parameters.txt")
+ltraj_list = traj_param['ltraj_list']
 
 laws = config['laws']
 terms = config['terms']
@@ -53,7 +54,8 @@ dic_quantities = extract_and_compute_trajectory_quantities(
     laws=laws,
     terms=terms,
     quantities=quantities,
-    verbose=True
+    verbose=True,
+    filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_quantities.h5"
 )
 
 # %% Compute quantities along trajectory
@@ -68,7 +70,6 @@ if traj_param['nbsatellite'] == 1:
         filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5",
         verbose=True)
 
-    
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
         laws=laws,
@@ -80,6 +81,25 @@ if traj_param['nbsatellite'] == 1:
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
 
-elif config['nbsatellite'] == 4:
+elif traj_param['nbsatellite'] == 4:
 
-    logging.warning("Computation for 4 satellites not implemented yet. Please set nbsatellite to 1 in the configuration.")
+    dic_terms = compute_all_terms_for_laws(
+        dic_quantities = dic_quantities, 
+        laws = laws,
+        physical_param = physical_param,
+        traj_param = traj_param,
+        method = method,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5",
+        verbose=True)
+    
+    dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
+        dic_terms=dic_terms,
+        laws=laws,
+        physical_param=physical_param,
+        traj_param=traj_param,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5",
+        verbose=True)
+    
+    time_end = time.time()
+    logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
+    

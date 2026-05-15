@@ -12,7 +12,7 @@ import logging
 import h5py
 
 from exact_laws.el_calc_mod.laws import LAWS
-from trajectories.derivation_satellite import divergence_1satellite
+from trajectories.derivation_satellite import divergence_1satellite, divergence_4satellite
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +84,7 @@ class TrajectoryLawsComputer:
             laws = []
         
         # Initialize result structure with satellites
-        satellite_names = list(dic_terms.keys())
-        dic_law_terms = {sat_name: {} for sat_name in satellite_names}
+        dic_law_terms = {'sat_'+str(i): {} for i in range(self.nbsatellite)}
         dic_coefficients = {}
         
         # Compute terms only once (they are identical for all laws)
@@ -101,46 +100,38 @@ class TrajectoryLawsComputer:
             try:
                 law_obj = LAWS[law_name]
                 
-                # Process each satellite
-                for sat_name in satellite_names:
-                    dic_terms_sat = dic_terms[sat_name]
-                    
-                    # Extract satellite-specific physical parameters if nbsatellite=4
-                    physical_param_sat = self.physical_param.copy() if self.physical_param else {}
-                    if self.nbsatellite == 4 and isinstance(physical_param_sat, dict):
-                        # Convert list parameters to satellite-specific values
-                        for key, value in physical_param_sat.items():
-                            if isinstance(value, list):
-                                # Use appropriate satellite index
-                                sat_idx = int(sat_name.split('_')[1])
-                                if sat_idx < len(value):
-                                    physical_param_sat[key] = value[sat_idx]
-                                else:
-                                    physical_param_sat[key] = value[0]
-                    
-                    # Apply coefficients and divergence factors
+                if self.traj_param['nbsatellite'] == 1:
+                    # Single satellite case: compute once and replicate for uniform structure                                        
+                    # Calculate law terms and coefficients for this satellite
                     law_terms, law_coeffs = self._apply_law_coefficients_1satellite(
-                        dic_terms_sat, 
+                        dic_terms['sat_0'], 
                         law_obj, 
-                        physical_param_sat
                     )
-                    
-                    # Apply roll shift to center trajectories on last axis (points only)
-                    for term_key, term_array in law_terms.items():
-                        if isinstance(term_array, np.ndarray) and term_array.ndim >= 1:
-                            # Roll shift on last axis (points dimension)
-                            shift = term_array.shape[-1] // 2
-                            law_terms[term_key] = np.roll(term_array, shift=shift, axis=-1)
-                    
-                    # Store terms for this satellite
-                    dic_law_terms[sat_name].update(law_terms)
+
+                elif self.traj_param['nbsatellite'] == 4:
+                    # Multi-satellite case: compute for the main satellite
+                    # Calculate law terms and coefficients for the main satellite
+                    law_terms, law_coeffs = self._apply_law_coefficients_4satellite(
+                        dic_terms,
+                        law_obj,
+                    )
+
+                # # Apply roll shift to center trajectories on last axis (points only)
+                # for term_key, term_array in law_terms.items():
+                #     if isinstance(term_array, np.ndarray) and term_array.ndim >= 1:
+                #         # Roll shift on last axis (points dimension)
+                #         shift = term_array.shape[-1] // 2
+                #         law_terms[term_key] = np.roll(term_array, shift=shift, axis=-1)
                 
+                # Store terms for this satellite
+                dic_law_terms['sat_0'].update(law_terms)
+
                 # For the first law, store the coefficients (they will be identical for others)
                 for term_key, coeff_value in law_coeffs.items():
                     dic_coefficients[f"{law_name}_{term_key}"] = coeff_value
                 
                 if self.verbose:
-                    logging.info(f"  [OK] Terms computed for {len(satellite_names)} satellite(s)")
+                    logging.info(f"  [OK] Terms computed for {len(list(dic_terms.keys()))} satellite(s)")
                     logging.info(f"    Applied terms: {list(law_terms.keys())}")
             
             except Exception as e:
@@ -152,7 +143,7 @@ class TrajectoryLawsComputer:
     
     # ========== PRIVATE METHODS ==========
     
-    def _apply_law_coefficients_1satellite(self, dic_terms_sat: dict, law_obj, physical_param_sat: dict):
+    def _apply_law_coefficients_1satellite(self, dic_terms_sat: dict, law_obj):
         """
         Apply law coefficients to computed terms for a single satellite.
         
@@ -176,7 +167,7 @@ class TrajectoryLawsComputer:
         """
         
         # Clean parameters for terms_and_coeffs
-        params_clean = self._prepare_dic_param_for_terms_and_coeffs(physical_param_sat)
+        params_clean = self._prepare_dic_param_for_terms_and_coeffs(self.physical_param)
         law_terms, coeffs = law_obj.terms_and_coeffs(params_clean)
         result = {}
         
@@ -191,22 +182,21 @@ class TrajectoryLawsComputer:
         
         # Process divergence terms
         for coeff_key, coeff_value in div_coeffs.items():
-            base_term = coeff_key.replace('div_', '')
-            if base_term in dic_terms_sat:
-                term_value = dic_terms_sat[base_term]
+            term_name = coeff_key.replace('div_', '')
+            if term_name in dic_terms_sat:
+                term_value = dic_terms_sat[term_name]
                 result[coeff_key] = divergence_1satellite(term_value, self.traj_param)
                 applied_terms.append(coeff_key)
             else:
-                incomputable_terms.append((coeff_key, f"term '{base_term}' not computed"))
+                incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
         
         # Process source terms
         for coeff_key, coeff_value in source_coeffs.items():
             if coeff_key in dic_terms_sat:
-                term_value = dic_terms_sat[coeff_key]
-                result[coeff_key] = term_value
+                result[coeff_key] = dic_terms_sat[coeff_key]
                 applied_terms.append(coeff_key)
             else:
-                incomputable_terms.append((coeff_key, "term not computed"))
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
         
         # Process simple terms (no div_ or source_ prefix)
         for coeff_key, coeff_value in simple_coeffs.items():
@@ -215,13 +205,74 @@ class TrajectoryLawsComputer:
                 result[coeff_key] = term_value
                 applied_terms.append(coeff_key)
             else:
-                incomputable_terms.append((coeff_key, "term not computed"))
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
         
         if self.verbose and incomputable_terms:
             logging.info(f"    [WARNING] {len(incomputable_terms)} terms could not be computed")
         
         return result, coeffs
     
+    def _apply_law_coefficients_4satellite(self, dic_terms: dict, law_obj):
+        """
+        Apply law coefficients to computed terms for four satellites.
+        
+        Handles multi-trajectory array structure by preserving dimensions
+        through all operations. Matches terms with coefficients and applies
+        divergence factors as needed, using satellite-specific physical parameters.
+        
+        Parameters:
+        -----------
+        dic_terms : dict
+            Dictionary of computed terms for all satellites with uniform structure:
+            {term_name: array(n_trajectories, n_points)}
+        law_obj : AbstractLaw
+            Law object containing terms_and_coeffs() method
+        physical_param_sat : dict
+            Satellite-specific physical parameters
+        Returns:
+        -------
+        tuple : (result dict, coefficients dict)
+        """
+        params_clean = self._prepare_dic_param_for_terms_and_coeffs(self.physical_param)
+        law_terms, coeffs_sat_0 = law_obj.terms_and_coeffs(params_clean)
+        result = {}
+
+        # PRE-FILTER coefficients by type (ONE-TIME, not per-iteration)
+        div_coeffs = {k: v for k, v in coeffs_sat_0.items() if k.startswith('div_')}
+        source_coeffs = {k: v for k, v in coeffs_sat_0.items() if k.startswith('source_')}
+        simple_coeffs = {k: v for k, v in coeffs_sat_0.items() 
+                         if not k.startswith(('div_', 'source_'))}
+        
+        incomputable_terms = []
+        applied_terms = [] 
+
+        # Process divergence terms
+        for coeff_key, coeff_value in div_coeffs.items():
+            term_name = coeff_key.replace('div_', '')
+            if term_name in dic_terms['sat_0']:
+                result[coeff_key] = divergence_4satellite(dic_terms, term_name, self.traj_param)
+                applied_terms.append(coeff_key)
+            else:
+                incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
+
+        # Process source terms
+        for coeff_key, coeff_value in source_coeffs.items():
+            if coeff_key in dic_terms['sat_0']:
+                result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                applied_terms.append(coeff_key)
+            else:
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
+
+        # Process simple terms (no div_ or source_ prefix)
+        for coeff_key, coeff_value in simple_coeffs.items():
+            if coeff_key in dic_terms['sat_0']:
+                result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                applied_terms.append(coeff_key)
+            else:
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
+    
+        return result, coeffs_sat_0
+
     def _prepare_dic_param_for_terms_and_coeffs(self, dic_param: dict):
         """
         Prepare dic_param for terms_and_coeffs() by converting list-based parameters to scalars.

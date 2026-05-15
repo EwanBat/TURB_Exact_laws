@@ -11,6 +11,7 @@ Structure: dic_quant = {key: array(n_trajectories, n_points)} (nbsatellite=1)
 """
 
 import numpy as np
+import h5py
 import logging
 from exact_laws.preprocessing.quantities import QUANTITIES
 from exact_laws.el_calc_mod.laws import LAWS
@@ -164,7 +165,7 @@ class TrajectoryQuantitiesComputer:
        
     # ========== PUBLIC METHODS ==========
     
-    def extract_and_compute(self, dic_datas: dict, laws=None, terms=None, quantities=None):
+    def extract_and_compute(self, dic_datas: dict, laws=None, terms=None, quantities=None, filename: str = "computed_quantities.h5"):
         """
         Main entry point: Compute all required quantities for vectorized trajectories.
         
@@ -208,6 +209,7 @@ class TrajectoryQuantitiesComputer:
             logger.info(f"  [OK] All quantities computed successfully")
             logger.info(result['sat_0'].keys())
         
+        self.quantities_to_h5(result, filename)
         return result
     
     def list_computable_quantities(self, dic_quant: dict, laws=None, terms=None, 
@@ -284,27 +286,74 @@ class TrajectoryQuantitiesComputer:
         dict : dic_datas with added quantities (modifies in-place)
         """
         
-        for quantity_name in available_quantities:
-            try:
-                if quantity_name not in self.QUANTITIES:
-                    raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
+        if self.nbsatellite == 1:
+            for quantity_name in available_quantities:
+                try:
+                    if quantity_name not in self.QUANTITIES:
+                        raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
+                        
+                    # Store result maintaining {sat_name: {var_name: array}} structure
+                    for sat_name in dic_datas.keys():
+                        result = self._compute_quantity_vectorized(
+                            quantity_name, dic_datas[sat_name]
+                        )
+                        if isinstance(result, dict):
+                            # If result is a dict of multiple datasets, merge into dic_datas
+                            for key, value in result.items():
+                                dic_datas[sat_name][key] = value
+                        else:
+                            dic_datas[sat_name][quantity_name] = result
+                
+                except Exception as e:
+                    if self.verbose:
+                        logger.error(f"Failed to compute {quantity_name}: {str(e)}")
+        
+        elif self.nbsatellite == 4:
+            # For 4 satellites, we may need to compute gradients/divergences using all satellite data
+            # STEP 1: Compute all raw quantities for each satellite
+            for quantity_name in available_quantities:
+                if quantity_name in self.GRADIENT_QUANTITIES:
+                    continue  # Skip gradient quantities for now
+                
+                try:
+                    if quantity_name not in self.QUANTITIES:
+                        raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
                     
-                # Store result maintaining {sat_name: {var_name: array}} structure
-                for sat_name in dic_datas.keys():
+                    for sat_name in dic_datas.keys():
+                        result = self._compute_quantity_vectorized(
+                            quantity_name, dic_datas[sat_name]
+                        )
+                        if isinstance(result, dict):
+                            for key, value in result.items():
+                                dic_datas[sat_name][key] = value
+                        else:
+                            dic_datas[sat_name][quantity_name] = result
+                
+                except Exception as e:
+                    if self.verbose:
+                        logger.error(f"Failed to compute {quantity_name} for {sat_name}: {str(e)}")
+            
+            # STEP 2: Compute gradient/divergence quantities using all satellite data
+            for quantity_name in available_quantities:
+                if quantity_name not in self.GRADIENT_QUANTITIES:
+                    continue  # Only compute gradient/divergence quantities here
+
+                try:
+                    if quantity_name not in self.QUANTITIES:
+                        raise ValueError(f"Gradient quantity '{quantity_name}' not found in GRADIENT_QUANTITIES")
                     result = self._compute_quantity_vectorized(
-                        quantity_name, dic_datas[sat_name]
+                        quantity_name, dic_datas
                     )
                     if isinstance(result, dict):
-                        # If result is a dict of multiple datasets, merge into dic_datas
                         for key, value in result.items():
-                            dic_datas[sat_name][key] = value
+                            dic_datas['sat_0'][key] = value # We derive around sat_0 as it is the reference satellite
                     else:
-                        dic_datas[sat_name][quantity_name] = result
-            
-            except Exception as e:
-                if self.verbose:
-                    logger.error(f"Failed to compute {quantity_name}: {str(e)}")
-        
+                        dic_datas['sat_0'][quantity_name] = result
+                
+                except Exception as e:
+                    if self.verbose:
+                        logger.error(f"Failed to compute {quantity_name} for 4 satellites: {str(e)}")
+
         return dic_datas
     
     def _quantity_is_available(self, quantity_name: str, dic_quant: dict, all_dependencies: dict):
@@ -349,12 +398,30 @@ class TrajectoryQuantitiesComputer:
         else:
             return mock_file.data
 
+    def quantities_to_h5(self, dic_quant: dict, filename: str):
+        """
+        Save computed quantities to an HDF5 file.
+        
+        Parameters:
+        -----------
+        dic_quant : dict
+            Computed quantities (vectorized structure)
+        filename : str
+            Output HDF5 file name
+        """
+        
+        with h5py.File(filename, 'w') as f:
+            for sat_name, sat_data in dic_quant.items():
+                group = f.create_group(sat_name)
+                for var_name, data_array in sat_data.items():
+                    group.create_dataset(var_name, data=data_array)
+
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
 def extract_and_compute_trajectory_quantities(dic_datas: dict, grid_param: dict = None,
                                               traj_param: dict = None, physical_param: dict = None,
                                               laws=None, terms=None, quantities=None,
-                                              verbose: bool = False):
+                                              verbose: bool = False, filename: str = "computed_quantities.h5"):
     """
     Backward compatibility wrapper for extract_and_compute.
     
@@ -370,5 +437,6 @@ def extract_and_compute_trajectory_quantities(dic_datas: dict, grid_param: dict 
     computer = TrajectoryQuantitiesComputer(verbose=verbose, 
                                            grid_param=grid_param, 
                                            physical_param=physical_param, 
-                                           traj_param=traj_param)
-    return computer.extract_and_compute(dic_datas, laws, terms, quantities)
+                                           traj_param=traj_param,
+                                       )
+    return computer.extract_and_compute(dic_datas, laws, terms, quantities, filename)

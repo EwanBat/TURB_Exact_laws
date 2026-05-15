@@ -95,9 +95,17 @@ class TrajectoryTermsComputer:
         'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],  # Kinetic hyperdissipation order 2
         'Ihdk2': ['Ihdk2x', 'Ihdk2y', 'Ihdk2z'],  # Incompressible kinetic hyperdissipation order 2
     }
+
+    FLUX_TERMS = [
+        "flux_dvdvdv",
+        "flux_dbdbdv",
+        "flux_dvdbdb",
+    ]
     
-    SATELLITE_NAMES = ['sat_0', 'sat_1', 'sat_2', 'sat_3']
-    
+    SOURCE_TERMS = [
+        "source_dpan",
+    ]
+        
     # ========== INITIALIZATION ==========
     
     def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None):
@@ -190,17 +198,13 @@ class TrajectoryTermsComputer:
             # Compute for each satellite
             satellite_names = list(dic_quant.keys())
             
-            for sat_name in satellite_names:
-                # Extract data for this satellite
+            if self.traj_param['nbsatellite'] == 1:
+                # Single satellite case: compute once and replicate for uniform structure
+                sat_name = satellite_names[0]
                 dic_quant_sat = dic_quant[sat_name]
-                
-                # Extract satellite-specific parameters
                 dic_param_sat = self._extract_sat_parameters(sat_name)
-                
-                # Convert abstract variables to concrete components for this satellite
                 args_sat = self._get_concrete_variables(abstract_vars, dic_quant_sat)
                 
-                # Compute term for this satellite
                 if method == "fourier":
                     result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
                 elif method == "incremental":
@@ -210,15 +214,42 @@ class TrajectoryTermsComputer:
                     result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
-
+                
                 if type(result_sat) != np.ndarray:
                     result_sat = np.asarray(result_sat)
                 
-                result[sat_name] = result_sat
+                # Replicate result for uniform structure
+                for sat in satellite_names:
+                    result[sat] = result_sat
+            
+            elif self.traj_param['nbsatellite'] == 4:
+                for sat_name in satellite_names:
+                    if term_name in self.SOURCE_TERMS and sat_name != 'sat_0':
+                        # For source terms, only compute for reference satellite (sat_0)
+                        continue
+
+                    dic_quant_sat = dic_quant[sat_name] # Extract data for this satellite
+                    dic_param_sat = self._extract_sat_parameters(sat_name) # Extract satellite-specific parameters
+                    args_sat = self._get_concrete_variables(abstract_vars, dic_quant_sat) # Convert abstract variables to concrete components for this satellite
+                    
+                    if method == "fourier":
+                        result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
+                    elif method == "incremental":
+                        num_trajs = len(self.traj_param['trajectories_list'])
+                        length_traj = len(self.traj_param['trajectories_list'][0])
+                        args_array = np.array(args_sat)
+                        result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+                    else:
+                        raise ValueError(f"Unsupported method: {method}")
+
+                    if type(result_sat) != np.ndarray:
+                        result_sat = np.asarray(result_sat)
+                    
+                    result[sat_name] = result_sat
             
         except Exception as e:
             if self.verbose:
-                logger.error(f"Failed to compute {term_name}: {e}")
+                logger.error(f"Failed to compute {term_name}: {e} for satellite {sat_name}")
             raise
         
         return result
@@ -272,7 +303,7 @@ class TrajectoryTermsComputer:
                     result[sat_name][term_name] = computed[sat_name]
             except Exception as e:
                 if self.verbose:
-                    logger.error(f"Failed to compute {term_name}: {str(e)}")
+                    logger.error(f"Failed to compute {term_name}: {str(e)} for satellite {sat_name}")
         
         if self.verbose:
             logging.info(f"  [OK] All {len(required_terms)} terms computed successfully:")

@@ -231,12 +231,12 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
     
     # Load RUN_PARAMS section
     try:
-        method = config["RUN_PARAMS"].get("method", "fourier")
-        nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", 1)
-        gap_satellite = config["RUN_PARAMS"].getfloat("gap_satellite", 1)
-        trajectory_method = config["RUN_PARAMS"].get("trajectory_method", "linear_x")
-        Ninterp = config["RUN_PARAMS"].getint("Ninterp", 1)
-        step_traj = config["RUN_PARAMS"].getint("step_traj", 10)
+        method = config["RUN_PARAMS"].get("method", None)
+        nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", None)
+        gap_satellite = config["RUN_PARAMS"].getfloat("gap_satellite", None)
+        trajectory_method = config["RUN_PARAMS"].get("trajectory_method", None)
+        Ninterp = config["RUN_PARAMS"].getint("Ninterp", None)
+        step_traj = config["RUN_PARAMS"].getint("step_traj", None)
     except Exception as e:
         logging.error(f"Error reading RUN_PARAMS: {e}")
         raise

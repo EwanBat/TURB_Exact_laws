@@ -55,9 +55,12 @@ class FluxDbdbdv(AbstractTerm):
     def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, traj=False,**kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=traj)
     
-    def variables(self) -> List[str]:
-        return ['Ib','v']
-    
+    def variables(self, nbsatellite=1) -> List[str]:
+        if nbsatellite == 4:
+            return ['v', 'gradv', 'Ib', 'Igradb']
+        else:
+            return ['Ib','v']
+
     def print_expr(self):
         sp.init_printing(use_latex=True)
         return self.exprx, self.expry, self.exprz

@@ -49,8 +49,11 @@ class FluxDvdvdv(AbstractTerm):
     def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, traj=traj)
 
-    def variables(self) -> List[str]:
-        return ['v']
+    def variables(self, nbsatellite=1) -> List[str]:
+        if nbsatellite == 4:
+            return ['v', 'gradv']
+        else:
+            return ['v']
     
     def print_expr(self):
         sp.init_printing(use_latex=True)

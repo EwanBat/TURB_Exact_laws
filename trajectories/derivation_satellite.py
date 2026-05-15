@@ -11,7 +11,6 @@ def divergence_1satellite(term_value, traj_param):
     traj_param : dict
         Dictionary of trajectory parameters
     """
-    
     tangents_list = traj_param.get('tangents_list', None)
     ltraj_list = traj_param.get('ltraj_list', None)
     if tangents_list is None:
@@ -25,7 +24,7 @@ def divergence_1satellite(term_value, traj_param):
         np.gradient(term_value_para[traj_idx, :], ltraj_list[traj_idx, :])
         for traj_idx in range(n_trajectories)
     ])
-    
+
     return divergence_para
 
 def gradient_1satellite(term_value, traj_param):
@@ -124,3 +123,84 @@ def curl_1satellite(term_value, traj_param):
 
     return curl_result
 
+def gradient_4satellite(dic_quant, quantity_name, traj_param):
+    """
+    Compute the gradient of a term along a trajectory for 4 satellites using reciprocal vectors.
+    
+    Parameters:
+    -----------
+    dic_quant : dict
+        Dictionary containing the term values for all 4 satellites
+    quantity_name : str
+        Name of the quantity for which to compute the gradient
+    traj_param : dict
+        Dictionary with tangents_list, ltraj_list, n_trajectories
+    
+    Returns:
+    --------
+    gradient_para : np.ndarray
+        3D array (n_dim, n_trajectories, n_points)
+    """
+    dR1 = traj_param['dR1']  # Vector from satellite 0 to satellite 1
+    dR2 = traj_param['dR2']  # Vector from satellite 0 to satellite 2
+    dR3 = traj_param['dR3']  # Vector from satellite 0 to satellite 3
+
+    alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
+
+    gradalpha = alpha1[np.newaxis, :, :] * np.cross(dR2[:, np.newaxis, np.newaxis], dR3[:, np.newaxis, np.newaxis], axis=0) + \
+                alpha2[np.newaxis, :, :] * np.cross(dR3[:, np.newaxis, np.newaxis], dR1[:, np.newaxis, np.newaxis], axis=0) + \
+                alpha3[np.newaxis, :, :] * np.cross(dR1[:, np.newaxis, np.newaxis], dR2[:, np.newaxis, np.newaxis], axis=0)
+
+    reciprocal_volume = 1 / np.dot(dR1, np.cross(dR2, dR3))
+    return gradalpha * reciprocal_volume
+
+def divergence_4satellite(dic_quant, quantity_name, traj_param):
+    """
+    Compute the divergence of a term along a trajectory for 4 satellites using reciprocal vectors.
+    
+    Parameters:
+    -----------
+    dic_quant : dict
+        Dictionary containing the term values for all 4 satellites
+    quantity_name : str
+        Name of the quantity for which to compute the divergence
+    traj_param : dict
+        Dictionary with tangents_list, ltraj_list, n_trajectories
+    
+    Returns:
+    --------
+    divergence_para : np.ndarray
+        2D array (n_trajectories, n_points)
+    """
+
+    dR1 = traj_param['dR1']  # Vector from satellite 0 to satellite 1
+    dR2 = traj_param['dR2']  # Vector from satellite 0 to satellite 2
+    dR3 = traj_param['dR3']  # Vector from satellite 0 to satellite 3
+    
+    if traj_param['trajectory_method'] == 'linear_x' and quantity_name.split('_')[0] == 'flux':
+        alpha1 = np.roll(dic_quant['sat_1'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
+        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    elif traj_param['trajectory_method'] == 'linear_y' and quantity_name.split('_')[0] == 'flux':
+        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha2 = np.roll(dic_quant['sat_2'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
+        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    elif traj_param['trajectory_method'] == 'linear_z' and quantity_name.split('_')[0] == 'flux':
+        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha3 = np.roll(dic_quant['sat_3'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
+    else:
+        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
+        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
+
+    print(traj_param['trajectory_method'], quantity_name)
+    print(np.einsum('i...,i...', alpha1, np.cross(dR2, dR3)[:, np.newaxis, np.newaxis])[0,:])
+    divalpha = np.einsum('i...,i...', alpha1, np.cross(dR2, dR3)[:, np.newaxis, np.newaxis]) + \
+                np.einsum('i...,i...', alpha2, np.cross(dR3, dR1)[:, np.newaxis, np.newaxis]) + \
+                np.einsum('i...,i...', alpha3, np.cross(dR1, dR2)[:, np.newaxis, np.newaxis])
+    
+    reciprocal_volume = 1 / np.dot(dR1, np.cross(dR2, dR3))
+    return divalpha * reciprocal_volume
