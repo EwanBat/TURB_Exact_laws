@@ -357,18 +357,13 @@ def interpolation_along_trajectory(trajectory: np.ndarray, array_data: np.ndarra
     interpolated_values = rbf_interpolator(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2])
     return interpolated_values
 
-
 def _compute_tangent_vectors(trajectory_func: Callable,
                              t_array: np.ndarray,
                              grid_param: dict,
                              traj_param: dict,
                              **kwargs) -> np.ndarray:
     """
-    Compute normalized tangent vectors along a trajectory.
-    
-    For each point, uses finite differences with neighbors to compute the direction
-    of motion. Edge points use one-sided differences, interior points use centered differences.
-    All vectors are normalized to unit length.
+    Compute normalized tangent vectors along a trajectory IN PHYSICAL SPACE.
     
     Parameters:
     -----------
@@ -386,30 +381,35 @@ def _compute_tangent_vectors(trajectory_func: Callable,
     Returns:
     -------
     np.ndarray
-        Normalized tangent vectors, shape (n_points, 3)
+        Normalized tangent vectors in PHYSICAL SPACE, shape (n_points, 3)
     """
-    n_points = len(t_array)
-    tangents = np.zeros((n_points, 3))
-    Ninterp = traj_param.get('Ninterp', 1)
-    N = grid_param['N']
     
-    lx = np.arange(N[0]) * grid_param['c'][0]
-    ly = np.arange(N[1]) * grid_param['c'][1]
-    lz = np.arange(N[2]) * grid_param['c'][2]
+    # Physical coordinates arrays
+    lx = np.arange(grid_param['N'][0]) * grid_param['c'][0]
+    ly = np.arange(grid_param['N'][1]) * grid_param['c'][1]
+    lz = np.arange(grid_param['N'][2]) * grid_param['c'][2]
     
-    all_traj = trajectory_func(t_array, N=N, Ninterp=Ninterp, **kwargs)  # Une seule fois
-    tangents = np.zeros_like(all_traj, dtype=float)
-    tangents[0,:] = all_traj[1,:] - all_traj[0,:]  # Forward difference at start
-    tangents[-1,:] = all_traj[-1,:] - all_traj[-2,:]  # Backward difference at end
-    tangents[1:-1,:] = (all_traj[2:,:] - all_traj[:-2,:]) / 2  # Centered difference
+    # Step 1: Get trajectory in INDEX space
+    all_traj_indices = trajectory_func(t_array, N=grid_param['N'], Ninterp=traj_param.get('Ninterp', 1), **kwargs)  # Shape (n_points, 3)
+    
+    # Step 2: Convert INDICES → PHYSICAL COORDINATES
+    all_traj_physical = np.zeros_like(all_traj_indices, dtype=float)
+    all_traj_physical[:, 0] = lx[all_traj_indices[:, 0].astype(int)]
+    all_traj_physical[:, 1] = ly[all_traj_indices[:, 1].astype(int)]
+    all_traj_physical[:, 2] = lz[all_traj_indices[:, 2].astype(int)]
+    
+    # Step 3: Compute finite differences in PHYSICAL SPACE
+    tangents = np.zeros_like(all_traj_physical, dtype=float)
+    tangents[0,:] = all_traj_physical[1,:] - all_traj_physical[0,:]  # [0.001m, 0.005m, 0]
+    tangents[-1,:] = all_traj_physical[-1,:] - all_traj_physical[-2,:]
+    tangents[1:-1,:] = (all_traj_physical[2:,:] - all_traj_physical[:-2,:]) / 2
 
-    # Normalize tangent vectors
-    norms = np.linalg.norm(tangents, axis=1)
+    # Step 4: Normalize in PHYSICAL SPACE
+    norms = np.linalg.norm(tangents, axis=1)  # √(0.001² + 0.005²) = 0.0051m
     norms[norms == 0] = 1  # Avoid division by zero
-    tangents = tangents / norms[:,np.newaxis]
+    tangents = tangents / norms[:,np.newaxis]  # Vecteur unitaire sans dimension
 
     return tangents
-
 
 def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray, 
                                        traj_param: dict,
@@ -451,9 +451,9 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
         # Define 4 satellites in a centered square
         satellites = {
             'sat_0': np.array([0, 0, 0]),   # Center
-            'sat_1': traj_param['dR1'] / grid_param['c'][0],  # x positive
-            'sat_2': traj_param['dR2'] / grid_param['c'][1],  # y positive
-            'sat_3': traj_param['dR3'] / grid_param['c'][2]   # z positive
+            'sat_1': traj_param['dR1'] / grid_param['c'],  # x positive
+            'sat_2': traj_param['dR2'] / grid_param['c'],  # y positive
+            'sat_3': traj_param['dR3'] / grid_param['c'],   # z positive
         }
         # Generate 4 trajectories
         trajectories = {}
@@ -542,23 +542,23 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         t = np.arange(Ninterp * N[2]) / Ninterp
     
     if nbsatellite == 4: # Define satellite offsets for 4-satellite configuration
-        dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c'][0]  # Convert gap from indices to physical units
-        dR2 = np.array([0, gap_satellite, 0]) * grid_param['c'][1]
-        dR3 = np.array([0, 0, gap_satellite]) * grid_param['c'][2]
+        dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c']  # Convert gap from indices to physical units
+        dR2 = np.array([0, gap_satellite, 0]) * grid_param['c']
+        dR3 = np.array([0, 0, gap_satellite]) * grid_param['c']
         traj_param['dR1'] = dR1
         traj_param['dR2'] = dR2
         traj_param['dR3'] = dR3
 
     for idx, trajectory_kwargs in enumerate(trajectory_kwargs_list):
         trajectory = trajectory_func(t, N=N, Ninterp=Ninterp, **trajectory_kwargs)
-        trajectories_list.append(trajectory)
+        trajectories_list.append(np.copy(trajectory))
            
         # Compute normalized tangent vectors and physical coordinates
         tangents = _compute_tangent_vectors(trajectory_func, t, grid_param, traj_param, **trajectory_kwargs)
-        tangents_list.append(tangents)
-        
+        tangents_list.append(np.copy(tangents))
+
         ltraj = _compute_trajectory_coordinates(trajectory, grid_param, tangents)
-        ltraj_list.append(ltraj)
+        ltraj_list.append(np.copy(ltraj))
 
         # Extract quantities along trajectory
         trajectory_data = extract_quantities_along_trajectory(

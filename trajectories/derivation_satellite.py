@@ -196,8 +196,6 @@ def divergence_4satellite(dic_quant, quantity_name, traj_param):
         alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
         alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
 
-    print(traj_param['trajectory_method'], quantity_name)
-    print(np.einsum('i...,i...', alpha1, np.cross(dR2, dR3)[:, np.newaxis, np.newaxis])[0,:])
     divalpha = np.einsum('i...,i...', alpha1, np.cross(dR2, dR3)[:, np.newaxis, np.newaxis]) + \
                 np.einsum('i...,i...', alpha2, np.cross(dR3, dR1)[:, np.newaxis, np.newaxis]) + \
                 np.einsum('i...,i...', alpha3, np.cross(dR1, dR2)[:, np.newaxis, np.newaxis])

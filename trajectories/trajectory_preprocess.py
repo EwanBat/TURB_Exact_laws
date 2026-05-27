@@ -146,8 +146,8 @@ def load_oca_data(input_folder: str, cycle: str, sim_type: str):
     with h5py.File(f"{input_folder}/3Dfields_pi.h5", "r") as fp:
         (dic_datas["ppar"],
          dic_datas["pperp"]) = extract_quantities_from_OCA_file(fp, ["pparli", "pperpi"], cycle)
-        dic_datas["ppar"] /= 2
-        dic_datas["pperp"] /= 2
+        dic_datas["ppar"] /= 2 #Correction de l'adimensionnement
+        dic_datas["pperp"] /= 2 #Correction de l'adimensionnement
     logging.info(f"  [OK] Pressure loaded:         {dic_datas['ppar'].shape}")
     
     # Try loading force amplitude (optional)

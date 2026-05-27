@@ -91,6 +91,7 @@ class TrajectoryQuantitiesComputer:
         # === Spatial gradients (require 4 satellites in trajectory) ===
         'gradv': {'requires': ['vx', 'vy', 'vz']},
         'gradv2': {'requires': ['v2']},  # v2 computed from vx, vy, vz
+        'gradb': {'requires': ['bx', 'by', 'bz']},
         'gradrho': {'requires': ['rho']},
         'graduiso': {'requires': ['uiso']},  # uiso computed from ppar, pperp, rho
         'gradupol': {'requires': ['upol']},  # upol computed from ppar, pperp, rho
@@ -108,6 +109,7 @@ class TrajectoryQuantitiesComputer:
         'Igradrho': {'requires': ['Irho']},
         'Igraduiso': {'requires': ['Iuiso']},
         'Igradupol': {'requires': ['Iupol']},
+        'Igradb': {'requires': ['Ibx', 'Iby', 'Ibz']},
         'Idivj': {'requires': ['bx', 'by', 'bz']},
         
         # === Derived quantities (using derivation functions) ===
@@ -135,9 +137,7 @@ class TrajectoryQuantitiesComputer:
         'hdm': {'requires': ['bx', 'by', 'bz', 'rho']},
         'Ihdm': {'requires': ['bx', 'by', 'bz']},
     }
-    
-    SATELLITE_NAMES = ['sat_0', 'sat_1', 'sat_2', 'sat_3']
-    
+        
     # ========== INITIALIZATION ==========
     
     def __init__(self, verbose: bool = False, grid_param: dict = None, physical_param: dict = None, traj_param: dict = None):
@@ -193,7 +193,7 @@ class TrajectoryQuantitiesComputer:
             logger.info(f"  Separation:         {self.traj_param.get('separation', 1)}")
         
         # Get first satellite's data to analyze available quantities
-        first_sat_data = dic_datas.get(self.SATELLITE_NAMES[0], {})
+        first_sat_data = dic_datas['sat_0']
         available_quantities = self.list_computable_quantities(
             first_sat_data, laws, terms, quantities
         )
@@ -238,82 +238,55 @@ class TrajectoryQuantitiesComputer:
         if terms:
             for term_name in terms:
                 if term_name in TERMS:
-                    term_variables = TERMS[term_name].variables()
+                    term_variables = TERMS[term_name].variables(nbsatellite=self.nbsatellite)
                     quantities.extend(term_variables)
         
         # Add requirements from laws
         if laws:
             for law_name in laws:
                 if law_name in LAWS:
-                    law_variables = LAWS[law_name].variables()
+                    law_variables = LAWS[law_name].variables(nbsatellite=self.nbsatellite)
                     quantities.extend(law_variables)
         
-        required_quantities = set(quantities)
+        required_quantities = list(set(quantities))  # Unique list of required quantities
         
-        # STEP 2: Check availability
-        all_dependencies = {**self.QUANTITY_DEPENDENCIES, **self.GRADIENT_QUANTITIES}
-
-        available = []
-        for quantity_name in required_quantities:
-            if quantity_name not in all_dependencies:
-                # Undocumented quantity - check if it exists
-                if quantity_name in dic_quant:
-                    available.append(quantity_name)
-                continue
-            
-            # Check if it's a direct raw quantity or derivable
-            if self._quantity_is_available(quantity_name, dic_quant, 
-                                          all_dependencies):
-                available.append(quantity_name)
-        
-        return available
+        return required_quantities
     
     # ========== PRIVATE METHODS ==========
         
     def _compute_all_quantities(self, dic_datas: dict, available_quantities: list):
         """
         Compute all quantities using vectorized operations (no trajectory loops).
-        
-        Parameters:
-        -----------
-        dic_datas : dict
-            Vectorized data: {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
-        available_quantities : list
-            Quantities to compute
-        
-        Returns:
-        -------
-        dict : dic_datas with added quantities (modifies in-place)
+        Modifies dic_datas in-place, adding computed quantities.
         """
-        
+        # Initialiser la structure pour tous les satellites
+        dic_quantities = {sat_name: {} for sat_name in dic_datas.keys()}
+
         if self.nbsatellite == 1:
             for quantity_name in available_quantities:
                 try:
-                    if quantity_name not in self.QUANTITIES:
+                    if quantity_name not in self.QUANTITY_DEPENDENCIES and quantity_name not in self.GRADIENT_QUANTITIES:
                         raise ValueError(f"Quantity '{quantity_name}' not found in QUANTITIES")
                         
-                    # Store result maintaining {sat_name: {var_name: array}} structure
                     for sat_name in dic_datas.keys():
                         result = self._compute_quantity_vectorized(
                             quantity_name, dic_datas[sat_name]
                         )
                         if isinstance(result, dict):
-                            # If result is a dict of multiple datasets, merge into dic_datas
                             for key, value in result.items():
-                                dic_datas[sat_name][key] = value
+                                dic_quantities[sat_name][key] = value
                         else:
-                            dic_datas[sat_name][quantity_name] = result
+                            dic_quantities[sat_name][quantity_name] = result
                 
                 except Exception as e:
                     if self.verbose:
                         logger.error(f"Failed to compute {quantity_name}: {str(e)}")
         
         elif self.nbsatellite == 4:
-            # For 4 satellites, we may need to compute gradients/divergences using all satellite data
             # STEP 1: Compute all raw quantities for each satellite
             for quantity_name in available_quantities:
                 if quantity_name in self.GRADIENT_QUANTITIES:
-                    continue  # Skip gradient quantities for now
+                    continue
                 
                 try:
                     if quantity_name not in self.QUANTITIES:
@@ -325,45 +298,44 @@ class TrajectoryQuantitiesComputer:
                         )
                         if isinstance(result, dict):
                             for key, value in result.items():
-                                dic_datas[sat_name][key] = value
+                                dic_quantities[sat_name][key] = value
                         else:
-                            dic_datas[sat_name][quantity_name] = result
+                            dic_quantities[sat_name][quantity_name] = result
                 
                 except Exception as e:
                     if self.verbose:
                         logger.error(f"Failed to compute {quantity_name} for {sat_name}: {str(e)}")
             
+            # Update dic_quantities with keys from dic_datas for gradient computations
+            for sat_name in dic_datas.keys():
+                for key in dic_datas[sat_name].keys():
+                    if key not in dic_quantities[sat_name]:
+                        dic_quantities[sat_name][key] = dic_datas[sat_name][key]
+
             # STEP 2: Compute gradient/divergence quantities using all satellite data
             for quantity_name in available_quantities:
-                if quantity_name not in self.GRADIENT_QUANTITIES:
-                    continue  # Only compute gradient/divergence quantities here
-
+                if quantity_name in self.QUANTITY_DEPENDENCIES:
+                    continue
+                
                 try:
-                    if quantity_name not in self.QUANTITIES:
-                        raise ValueError(f"Gradient quantity '{quantity_name}' not found in GRADIENT_QUANTITIES")
+                    if quantity_name not in self.GRADIENT_QUANTITIES:
+                        raise ValueError(f"Quantity '{quantity_name}' not found in GRADIENT_QUANTITIES")
+
                     result = self._compute_quantity_vectorized(
-                        quantity_name, dic_datas
+                        quantity_name, dic_quantities # Use dic_quantities which now contains all raw quantities for all satellites
                     )
+
                     if isinstance(result, dict):
                         for key, value in result.items():
-                            dic_datas['sat_0'][key] = value # We derive around sat_0 as it is the reference satellite
+                            dic_quantities['sat_0'][key] = value
                     else:
-                        dic_datas['sat_0'][quantity_name] = result
+                        dic_quantities['sat_0'][quantity_name] = result
                 
                 except Exception as e:
                     if self.verbose:
                         logger.error(f"Failed to compute {quantity_name} for 4 satellites: {str(e)}")
 
-        return dic_datas
-    
-    def _quantity_is_available(self, quantity_name: str, dic_quant: dict, all_dependencies: dict):
-        """
-        Check if a quantity is available directly or can be computed.
-        dic_quant contains data from first satellite only: {var_name: array(...)}
-        """
-        deps = all_dependencies.get(quantity_name, {}).get("requires", [])
-        # Check if all dependencies exist
-        return all(dep in dic_quant for dep in deps) or quantity_name in dic_quant
+        return dic_quantities
     
     def _compute_quantity_vectorized(self, quantity_name: str, dic_quant_sat: dict):
         """

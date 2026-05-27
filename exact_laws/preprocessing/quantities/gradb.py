@@ -12,8 +12,8 @@ class GradB:
     def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
         inc = 'I' * self.incompressible
         if traj:
-            for axisb in ('x', 'y', 'z'):
-                if traj_param['nbsatellite'] == 1:
+            if traj_param['nbsatellite'] == 1:
+                for axisb in ('x', 'y', 'z'):
                     gradb = gradient_1satellite(
                         np.array([dic_quant[f"{inc}b{axisb}"]]),
                         traj_param
@@ -24,7 +24,8 @@ class GradB:
                             ds_name,
                             data=gradb[i]
                         )
-                elif traj_param['nbsatellite'] == 4:
+            elif traj_param['nbsatellite'] == 4:
+                for axisb in ('x', 'y', 'z'):
                     gradb = gradient_4satellite(
                         dic_quant,
                         f"{inc}b{axisb}",

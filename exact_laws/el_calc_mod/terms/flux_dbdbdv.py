@@ -57,13 +57,62 @@ class FluxDbdbdv(AbstractTerm):
     
     def variables(self, nbsatellite=1) -> List[str]:
         if nbsatellite == 4:
-            return ['v', 'gradv', 'Ib', 'Igradb']
+            return ['v', 'Ib', 'Igradb', 'gradv']
         else:
-            return ['Ib','v']
+            return ['v', 'Ib']
 
     def print_expr(self):
         sp.init_printing(use_latex=True)
         return self.exprx, self.expry, self.exprz
+
+    def calc_with_fourier_4sat(self, vx, vy, vz, Ibx, Iby, Ibz, 
+                            Idxbx, Idybx, Idzbx, Idxby, Idyby, Idzby, Idxbz, Idybz, Idzbz,
+                            dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=True, **kwarg) -> np.ndarray:
+        
+        transform = ft.fft(vx, traj=traj)
+        inv_transform = ft.ifft(vx, traj=traj)
+
+        fbxbx = transform(Ibx*Ibx)
+        fbyby = transform(Iby*Iby)
+        fbzbz = transform(Ibz*Ibz)
+
+        fbxvx = transform(Ibx*vx)
+        fbyvy = transform(Iby*vy)
+        fbzvz = transform(Ibz*vz)
+        fbxvy = transform(Ibx*vy)
+        fbyvx = transform(Iby*vx)
+        fbzvx = transform(Ibz*vx)
+        fbxvz = transform(Ibx*vz)
+        fbyvz = transform(Iby*vz)
+        fbzvy = transform(Ibz*vy)
+
+        fdxvx = transform(dxvx)
+        fdyvy = transform(dyvy)
+        fdzvz = transform(dzvz)
+
+        fdxbx = transform(Idxbx)
+        fdxby = transform(Idxby)
+        fdxbz = transform(Idxbz)
+        fdybx = transform(Idybx)
+        fdyby = transform(Idyby)
+        fdybz = transform(Idybz)
+        fdzbx = transform(Idzbx)
+        fdzby = transform(Idzby)
+        fdzbz = transform(Idzbz)
+
+        flux_xx = inv_transform(fbxbx*np.conj(fdxvx) + np.conj(fbxbx)*fdxvx + 2*(fbxvx*np.conj(fdxbx) + np.conj(fbxvx)*fdxbx))
+        flux_xy = inv_transform(fbyvy*np.conj(fdxvx) + np.conj(fbyvy)*fdxvx + 2*(fbyvx*np.conj(fdxby) + np.conj(fbyvx)*fdxby))
+        flux_xz = inv_transform(fbzbz*np.conj(fdxvx) + np.conj(fbzbz)*fdxvx + 2*(fbzvx*np.conj(fdxbz) + np.conj(fbzvx)*fdxbz))
+
+        flux_yx = inv_transform(fbxbx*np.conj(fdyvy) + np.conj(fbxbx)*fdyvy + 2*(fbxvy*np.conj(fdybx) + np.conj(fbxvy)*fdybx))
+        flux_yy = inv_transform(fbyby*np.conj(fdyvy) + np.conj(fbyby)*fdyvy + 2*(fbyvy*np.conj(fdyby) + np.conj(fbyvy)*fdyby))
+        flux_yz = inv_transform(fbzbz*np.conj(fdyvy) + np.conj(fbzbz)*fdyvy + 2*(fbzvy*np.conj(fdybz) + np.conj(fbzvy)*fdybz))
+
+        flux_zx = inv_transform(fbxbx*np.conj(fdzvz) + np.conj(fbxbx)*fdzvz + 2*(fbxvz*np.conj(fdzbx) + np.conj(fbxvz)*fdzbx))
+        flux_zy = inv_transform(fbyby*np.conj(fdzvz) + np.conj(fbyby)*fdzvz + 2*(fbyvz*np.conj(fdzby) + np.conj(fbyvz)*fdzby))
+        flux_zz = inv_transform(fbzbz*np.conj(fdzvz) + np.conj(fbzbz)*fdzvz + 2*(fbzvz*np.conj(fdzbz) + np.conj(fbzvz)*fdzbz))
+
+        return (flux_xx + flux_xy + flux_xz + flux_yx + flux_yy + flux_yz + flux_zx + flux_zy + flux_zz) / np.size(flux_xx, axis=-1)
 
 def load():
     return FluxDbdbdv()

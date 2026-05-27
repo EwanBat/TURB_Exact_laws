@@ -100,7 +100,7 @@ class TrajectoryLawsComputer:
             try:
                 law_obj = LAWS[law_name]
                 
-                if self.traj_param['nbsatellite'] == 1:
+                if self.nbsatellite == 1:
                     # Single satellite case: compute once and replicate for uniform structure                                        
                     # Calculate law terms and coefficients for this satellite
                     law_terms, law_coeffs = self._apply_law_coefficients_1satellite(
@@ -108,7 +108,7 @@ class TrajectoryLawsComputer:
                         law_obj, 
                     )
 
-                elif self.traj_param['nbsatellite'] == 4:
+                elif self.nbsatellite == 4:
                     # Multi-satellite case: compute for the main satellite
                     # Calculate law terms and coefficients for the main satellite
                     law_terms, law_coeffs = self._apply_law_coefficients_4satellite(
@@ -178,7 +178,6 @@ class TrajectoryLawsComputer:
                          if not k.startswith(('div_', 'source_'))}
         
         incomputable_terms = []
-        applied_terms = []
         
         # Process divergence terms
         for coeff_key, coeff_value in div_coeffs.items():
@@ -186,7 +185,6 @@ class TrajectoryLawsComputer:
             if term_name in dic_terms_sat:
                 term_value = dic_terms_sat[term_name]
                 result[coeff_key] = divergence_1satellite(term_value, self.traj_param)
-                applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
         
@@ -194,7 +192,6 @@ class TrajectoryLawsComputer:
         for coeff_key, coeff_value in source_coeffs.items():
             if coeff_key in dic_terms_sat:
                 result[coeff_key] = dic_terms_sat[coeff_key]
-                applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
         
@@ -203,7 +200,6 @@ class TrajectoryLawsComputer:
             if coeff_key in dic_terms_sat:
                 term_value = dic_terms_sat[coeff_key]
                 result[coeff_key] = term_value
-                applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
         
@@ -244,14 +240,13 @@ class TrajectoryLawsComputer:
                          if not k.startswith(('div_', 'source_'))}
         
         incomputable_terms = []
-        applied_terms = [] 
 
         # Process divergence terms
         for coeff_key, coeff_value in div_coeffs.items():
             term_name = coeff_key.replace('div_', '')
             if term_name in dic_terms['sat_0']:
-                result[coeff_key] = divergence_4satellite(dic_terms, term_name, self.traj_param)
-                applied_terms.append(coeff_key)
+                result[coeff_key] = dic_terms['sat_0'][term_name]
+                # result[coeff_key] = divergence_4satellite(dic_terms, term_name, self.traj_param)
             else:
                 incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
 
@@ -259,7 +254,6 @@ class TrajectoryLawsComputer:
         for coeff_key, coeff_value in source_coeffs.items():
             if coeff_key in dic_terms['sat_0']:
                 result[coeff_key] = dic_terms['sat_0'][coeff_key]
-                applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
 
@@ -267,7 +261,6 @@ class TrajectoryLawsComputer:
         for coeff_key, coeff_value in simple_coeffs.items():
             if coeff_key in dic_terms['sat_0']:
                 result[coeff_key] = dic_terms['sat_0'][coeff_key]
-                applied_terms.append(coeff_key)
             else:
                 incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
     

@@ -82,6 +82,8 @@ class TrajectoryTermsComputer:
         'Igradrho': ['Igradrhox', 'Igradrhoy', 'Igradrhoz'],  # Incompressible density gradient
         'gradv': ['dxvx', 'dyvx', 'dzvx', 'dxvy', 'dyvy', 'dzvy', 'dxvz', 'dyvz', 'dzvz'],  # Velocity gradient (3x3)
         'Igradv': ['Idxvx', 'Idyvx', 'Idzvx', 'Idxvy', 'Idyvy', 'Idzvy', 'Idxvz', 'Idyvz', 'Idzvz'],  # Incompressible velocity gradient
+        'gradb': ['dxbx', 'dybx', 'dzbx', 'dxby', 'dyby', 'dzby', 'dxbz', 'dybz', 'dzbz'],  # Magnetic field gradient (3x3)
+        'Igradb': ['Idxbx', 'Idybx', 'Idzbx', 'Idxby', 'Idyby', 'Idzby', 'Idxbz', 'Idybz', 'Idzbz'],  # Incompressible magnetic field gradient
         'graduiso': ['graduisox', 'graduisoy', 'graduisoz'],  # Isotropic velocity gradient
         'Igraduiso': ['Igraduisox', 'Igraduisoy', 'Igraduisoz'],  # Incompressible isotropic velocity gradient
         'gradupol': ['gradupolx', 'gradupoly', 'gradupolz'],  # Poloidal velocity gradient
@@ -115,7 +117,7 @@ class TrajectoryTermsComputer:
         Parameters:
         -----------
         verbose : bool
-            Enable detailed logging
+            Enable detailed logger
         physical_param : dict, optional
             Physical parameters
         traj_param : dict, optional
@@ -191,27 +193,22 @@ class TrajectoryTermsComputer:
         term_obj = TERMS[term_name]
         result = {}
         
-        try:
-            # Get abstract variables required by the term
-            abstract_vars = term_obj.variables()
-            
-            # Compute for each satellite
-            satellite_names = list(dic_quant.keys())
-            
-            if self.traj_param['nbsatellite'] == 1:
+        try:                        
+            if self.nbsatellite == 1:
                 # Single satellite case: compute once and replicate for uniform structure
-                sat_name = satellite_names[0]
-                dic_quant_sat = dic_quant[sat_name]
+                sat_name = 'sat_0'
                 dic_param_sat = self._extract_sat_parameters(sat_name)
-                args_sat = self._get_concrete_variables(abstract_vars, dic_quant_sat)
-                
+
                 if method == "fourier":
-                    result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
-                elif method == "incremental":
-                    num_trajs = len(self.traj_param['trajectories_list'])
-                    length_traj = len(self.traj_param['trajectories_list'][0])
-                    args_array = np.array(args_sat)
-                    result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+                    result_sat = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                # elif method == "incremental":
+                #     num_trajs = len(self.traj_param['trajectories_list'])
+                #     length_traj = len(self.traj_param['trajectories_list'][0])
+                #     # For incremental method, convert dict values to list preserving order from abstract_vars
+                #     args_list = [args_sat_dict[comp] for var in abstract_vars 
+                #                 for comp in self.VARIABLE_COMPONENTS.get(var, [var])]
+                #     args_array = np.array(args_list)
+                #     result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
                 
@@ -219,33 +216,34 @@ class TrajectoryTermsComputer:
                     result_sat = np.asarray(result_sat)
                 
                 # Replicate result for uniform structure
-                for sat in satellite_names:
-                    result[sat] = result_sat
+                result[sat_name] = result_sat
             
-            elif self.traj_param['nbsatellite'] == 4:
-                for sat_name in satellite_names:
-                    if term_name in self.SOURCE_TERMS and sat_name != 'sat_0':
-                        # For source terms, only compute for reference satellite (sat_0)
-                        continue
+            elif self.nbsatellite == 4:
+                
+                if method == "fourier":
+                    if term_name in self.FLUX_TERMS:
+                        
 
-                    dic_quant_sat = dic_quant[sat_name] # Extract data for this satellite
-                    dic_param_sat = self._extract_sat_parameters(sat_name) # Extract satellite-specific parameters
-                    args_sat = self._get_concrete_variables(abstract_vars, dic_quant_sat) # Convert abstract variables to concrete components for this satellite
-                    
-                    if method == "fourier":
-                        result_sat = term_obj.calc_fourier(*args_sat, dic_param=dic_param_sat, traj=True)
-                    elif method == "incremental":
-                        num_trajs = len(self.traj_param['trajectories_list'])
-                        length_traj = len(self.traj_param['trajectories_list'][0])
-                        args_array = np.array(args_sat)
-                        result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
-                    else:
-                        raise ValueError(f"Unsupported method: {method}")
+                        result_sat = term_obj.calc_with_fourier_4sat(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                    elif term_name in self.SOURCE_TERMS:
+                        sat_name = 'sat_0'  # Source terms are computed from satellite 0 data
+                        result_sat = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
 
-                    if type(result_sat) != np.ndarray:
-                        result_sat = np.asarray(result_sat)
-                    
-                    result[sat_name] = result_sat
+                # elif method == "incremental":
+                    # num_trajs = len(self.traj_param['trajectories_list'])
+                    # length_traj = len(self.traj_param['trajectories_list'][0])
+                    # # For incremental method, convert dict values to list preserving order from abstract_vars
+                    # args_list = [args_sat_dict[comp] for var in abstract_vars 
+                    #             for comp in self.VARIABLE_COMPONENTS.get(var, [var])]
+                    # args_array = np.array(args_list)
+                    # result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+                else:
+                    raise ValueError(f"Unsupported method: {method}")
+
+                if type(result_sat) != np.ndarray:
+                    result_sat = np.asarray(result_sat)
+                
+                result[sat_name] = result_sat
             
         except Exception as e:
             if self.verbose:
@@ -253,7 +251,7 @@ class TrajectoryTermsComputer:
             raise
         
         return result
-    
+
     def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, method: str = None, filename: str = "terms_trajectory.h5"):
         """
         Compute all terms required for the given laws.
@@ -285,10 +283,10 @@ class TrajectoryTermsComputer:
         required_terms = self.list_required_terms(laws)
         
         if self.verbose:
-            logging.info("\n" + "-"*70)
-            logging.info("FLUX AND SOURCE TERMS COMPUTATION")
-            logging.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
-            logging.info(f"  Structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
+            logger.info("\n" + "-"*70)
+            logger.info("FLUX AND SOURCE TERMS COMPUTATION")
+            logger.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
+            logger.info(f"  Structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
         
         # Initialize result structure with satellite names
         satellite_names = list(dic_quantities.keys())
@@ -299,15 +297,15 @@ class TrajectoryTermsComputer:
                 computed = self.compute_term_from_TERMS(term_name, dic_quantities, method=method)
                 
                 # Store in uniform structure {sat_name: {term_name: array}}
-                for sat_name in satellite_names:
+                for sat_name in computed.keys():
                     result[sat_name][term_name] = computed[sat_name]
             except Exception as e:
                 if self.verbose:
-                    logger.error(f"Failed to compute {term_name}: {str(e)} for satellite {sat_name}")
+                    logger.error(f"Failed to compute {term_name}: {str(e)}")
         
         if self.verbose:
-            logging.info(f"  [OK] All {len(required_terms)} terms computed successfully:")
-            logging.info(required_terms)
+            logger.info(f"  [OK] All {len(required_terms)} terms computed successfully:")
+            logger.info(required_terms)
         
         self.terms_to_h5(result_terms=result, filename=filename)
 
@@ -395,31 +393,6 @@ class TrajectoryTermsComputer:
         
         return dic_param_sat
     
-    def _get_concrete_variables(self, abstract_vars: list, dic_quant: dict):
-        """
-        Convert abstract variables to concrete components.
-        
-        Parameters:
-        -----------
-        abstract_vars : list[str]
-            List of abstract variables (ex: ['v', 'b'])
-        dic_quant : dict
-            Dictionary containing the data for one satellite
-        
-        Returns:
-        -------
-        list : List of np.ndarray corresponding to concrete variables
-        """
-        concrete_data = []
-        for var in abstract_vars:
-            components = self.VARIABLE_COMPONENTS.get(var, [var])  # Default to var itself
-            for comp in components:
-                if comp not in dic_quant:
-                    raise ValueError(f"Component '{comp}' (from '{var}') not found")
-                concrete_data.append(dic_quant[comp])
-        return concrete_data
-
-
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
 def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False):
