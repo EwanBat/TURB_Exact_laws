@@ -1,6 +1,7 @@
 from typing import List
 from numba import njit, prange
 import numpy as np
+import concurrent.futures
 
 
 class AbstractTerm:
@@ -13,44 +14,39 @@ class AbstractTerm:
     def calc_fourier(self, *args, **kwargs) -> (float or List[float]):
         raise NotImplementedError("You have to reimplement this method")
     
-    def calc_incremental_trajectories(self, args_array, num_trajectories, length_traj):
-        """
-        Calcule les incréments temporels/spatiaux pour une série de trajectoires.
-        Utilise le multi-threading pour paralléliser sur num_trajectories.
-        """
-        import concurrent.futures
+    def _calc_incremental_trajectories_loop(self, merged_quantities, n_trajectories, n_points):
+        
+        def process_single_trajectory(i): # Process a single trajectory and return its results
+            trajectory_results = [None] * n_points
+            for dl in range(n_points):
+                trajectory_results[dl] = self.calc([dl+n_points], [2*n_points], **merged_quantities[i], traj=True)
+            return i, trajectory_results
+        
+        results = [None] * n_trajectories
 
-        def process_single_trajectory(i):
-            """Fonction exécutée par chaque thread pour une trajectoire donnée"""
-            args_traj = args_array[:, i, :]
-            traj_results = []
-            
-            for j in range(length_traj):
-                traj_results.append(self.calc([j], [length_traj], *args_traj, traj=True))
-                
-            return traj_results
-
-        # Initialisation d'une liste vide de la bonne taille pour garder l'ordre
-        result_list = [None] * num_trajectories
-
-        # Création du pool de threads (utilise le nombre de coeurs de votre machine)
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # On lance un thread par trajectoire
-            futures = {executor.submit(process_single_trajectory, i): i for i in range(num_trajectories)}
-            
-            # Au fur et à mesure qu'ils terminent, on stocke le résultat à la bonne place
+            futures = {executor.submit(process_single_trajectory, i): i for i in range(n_trajectories)}
             for future in concurrent.futures.as_completed(futures):
-                index = futures[future]
-                result_list[index] = future.result()
+                index, trajectory_results = future.result()
+                results[index] = trajectory_results
+        
+        results = np.array(results)
+        if np.shape(results) != (n_trajectories, n_points):
+            results = np.moveaxis(results, -1, 0)  # Move points axis to the end
+        return 2 * results
 
-        # Transformation en array NumPy
-        result = np.array(result_list)
+    def calc_incremental_trajectories(self, dic_quantities: dict, traj_param: dict, sat1:str, sat2:str) -> (float or List[float]):
+        n_trajectories = traj_param["n_trajectories"]
+        n_points = traj_param["n_points"]
 
-        # Rangement des axes si le résultat est tridimensionnel (vecteurs)
-        if result.ndim == 3:
-            result = np.moveaxis(result, -1, 0)
-
-        return result
+        merged_quantities = []
+        for i in range(n_trajectories):
+            merged_quantities.append({})
+            for quantity in dic_quantities[sat1].keys():
+                if quantity in dic_quantities[sat2].keys():   
+                    merged_quantities[i].update({quantity: np.concatenate((dic_quantities[sat1][quantity][i,:], dic_quantities[sat2][quantity][i,:]), axis=0)})      
+        
+        return self._calc_incremental_trajectories_loop(merged_quantities, n_trajectories, n_points)        
 
     def variables(self) -> List[str]:
         raise NotImplementedError("You have to reimplement this method")

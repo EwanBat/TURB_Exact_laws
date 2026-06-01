@@ -58,8 +58,8 @@ class FluxDvdbdb(AbstractTerm):
     def calc_fourier(self, vx, vy, vz, Ibx, Iby, Ibz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, Ibx, Iby, Ibz, traj=traj)
 
-    def variables(self, nbsatellite=1) -> List[str]:
-        if nbsatellite == 4:
+    def variables(self, nbsatellite=1, method=None) -> List[str]:
+        if nbsatellite == 4 and method == "fourier":
             return ['v', 'Ib', 'Igradb', 'gradv']
         else:
             return ['v', 'Ib']

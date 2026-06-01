@@ -29,84 +29,74 @@ class TrajectoryTermsComputer:
     # ========== CLASS CONSTANTS ==========
     
     # Mapping of abstract variables to their concrete components
-    # Based on actual datasets created by quantities module files
     VARIABLE_COMPONENTS = {
-        # === Raw data ===
         'v': ['vx', 'vy', 'vz'],
         'Iv': ['Ivx', 'Ivy', 'Ivz'],
         'b': ['bx', 'by', 'bz'],
         'Ib': ['Ibx', 'Iby', 'Ibz'],
-        'w': ['wx', 'wy', 'wz'],  # Vitesse de vent (compressible)
-        'j': ['jx', 'jy', 'jz'],  # Courant
-        'Ij': ['Ijx', 'Ijy', 'Ijz'],  # Courant incompressible
-        'f': ['fx', 'fy', 'fz'],  # Force
-        
-        # === Scalaires directs ===
+        'w': ['wx', 'wy', 'wz'],
+        'j': ['jx', 'jy', 'jz'],
+        'Ij': ['Ijx', 'Ijy', 'Ijz'],
+        'f': ['fx', 'fy', 'fz'],
         'rho': ['rho'],
         'Irho': ['Irho'],
-        'v2': ['v2'],  # v²
-        'Iv2': ['Iv2'],  # Incompressible v²
-        'vnorm': ['vnorm'],  # ||v||
-        'Ivnorm': ['Ivnorm'],  # Incompressible ||v||
-        'bnorm': ['bnorm'],  # ||b||
-        'Ibnorm': ['Ibnorm'],  # Incompressible ||b||
-        'pm': ['pm'],  # Magnetic pressure
-        'Ipm': ['Ipm'],  # Incompressible magnetic pressure
-        'pgyr': ['ppar', 'pperp'],  # Gyrotropic pressure
-        'Ipgyr': ['Ippar', 'Ipperp'],  # Incompressible gyrotropic pressure
-        'piso': ['piso'],  # Isotropic pressure
-        'Ipiso': ['Ipiso'],  # Incompressible isotropic pressure
-        'ppol': ['ppol'],  # Poloidal pressure
-        'Ippol': ['Ippol'],  # Incompressible poloidal pressure
-        'pcgl': ['pparcgl', 'pperpcgl'],  # CGL pressure (parallel and perpendicular)
-        'Ipcgl': ['Ipparcgl', 'Ipperpcgl'],  # Incompressible CGL pressure
-        'ugyr': ['ugyr'],  # Gyrotropic velocity
-        'Iugyr': ['Iugyr'],  # Incompressible gyrotropic velocity
-        'uiso': ['uiso'],  # Isotropic velocity
-        'Iuiso': ['Iuiso'],  # Incompressible isotropic velocity
-        'upol': ['upol'],  # Poloidal velocity
-        'Iupol': ['Iupol'],  # Incompressible poloidal velocity
-        'ucgl': ['ucgl'],  # CGL velocity
-        'Iucgl': ['Iucgl'],  # Incompressible CGL velocity
-        
-        # === Divergences ===
-        'divv': ['divv'],  # Velocity divergence (scalar)
-        'Idivv': ['Idivv'],  # Incompressible velocity divergence
-        'divb': ['divb'],  # Magnetic field divergence (scalar)
-        'Idivb': ['Idivb'],  # Incompressible magnetic divergence
-        'divj': ['divj'],  # Current divergence (scalar)
-        'Idivj': ['Idivj'],  # Incompressible current divergence
-        
-        # === Gradients ===
-        'gradrho': ['gradrhox', 'gradrhoy', 'gradrhoz'],  # Density gradient
-        'Igradrho': ['Igradrhox', 'Igradrhoy', 'Igradrhoz'],  # Incompressible density gradient
-        'gradv': ['dxvx', 'dyvx', 'dzvx', 'dxvy', 'dyvy', 'dzvy', 'dxvz', 'dyvz', 'dzvz'],  # Velocity gradient (3x3)
-        'Igradv': ['Idxvx', 'Idyvx', 'Idzvx', 'Idxvy', 'Idyvy', 'Idzvy', 'Idxvz', 'Idyvz', 'Idzvz'],  # Incompressible velocity gradient
-        'gradb': ['dxbx', 'dybx', 'dzbx', 'dxby', 'dyby', 'dzby', 'dxbz', 'dybz', 'dzbz'],  # Magnetic field gradient (3x3)
-        'Igradb': ['Idxbx', 'Idybx', 'Idzbx', 'Idxby', 'Idyby', 'Idzby', 'Idxbz', 'Idybz', 'Idzbz'],  # Incompressible magnetic field gradient
-        'graduiso': ['graduisox', 'graduisoy', 'graduisoz'],  # Isotropic velocity gradient
-        'Igraduiso': ['Igraduisox', 'Igraduisoy', 'Igraduisoz'],  # Incompressible isotropic velocity gradient
-        'gradupol': ['gradupolx', 'gradupoly', 'gradupolz'],  # Poloidal velocity gradient
-        'Igradupol': ['Igradupolx', 'Igradupoly', 'Igradupolz'],  # Incompressible poloidal velocity gradient
-        
-        # === Hyperdissipation ===
-        'hdk': ['hdkx', 'hdky', 'hdkz'],  # Kinetic hyperdissipation
-        'Ihdk': ['Ihdkx', 'Ihdky', 'Ihdkz'],  # Incompressible kinetic hyperdissipation
-        'hdm': ['hdmx', 'hdmy', 'hdmz'],  # Magnetic hyperdissipation
-        'Ihdm': ['Ihdmx', 'Ihdmy', 'Ihdmz'],  # Incompressible magnetic hyperdissipation
-        'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],  # Kinetic hyperdissipation order 2
-        'Ihdk2': ['Ihdk2x', 'Ihdk2y', 'Ihdk2z'],  # Incompressible kinetic hyperdissipation order 2
+        'v2': ['v2'],
+        'Iv2': ['Iv2'],
+        'vnorm': ['vnorm'],
+        'Ivnorm': ['Ivnorm'],
+        'bnorm': ['bnorm'],
+        'Ibnorm': ['Ibnorm'],
+        'pm': ['pm'],
+        'Ipm': ['Ipm'],
+        'pgyr': ['ppar', 'pperp'],
+        'Ipgyr': ['Ippar', 'Ipperp'],
+        'piso': ['piso'],
+        'Ipiso': ['Ipiso'],
+        'ppol': ['ppol'],
+        'Ippol': ['Ippol'],
+        'pcgl': ['pparcgl', 'pperpcgl'],
+        'Ipcgl': ['Ipparcgl', 'Ipperpcgl'],
+        'ugyr': ['ugyr'],
+        'Iugyr': ['Iugyr'],
+        'uiso': ['uiso'],
+        'Iuiso': ['Iuiso'],
+        'upol': ['upol'],
+        'Iupol': ['Iupol'],
+        'ucgl': ['ucgl'],
+        'Iucgl': ['Iucgl'],
+        'divv': ['divv'],
+        'Idivv': ['Idivv'],
+        'divb': ['divb'],
+        'Idivb': ['Idivb'],
+        'divj': ['divj'],
+        'Idivj': ['Idivj'],
+        'gradrho': ['gradrhox', 'gradrhoy', 'gradrhoz'],
+        'Igradrho': ['Igradrhox', 'Igradrhoy', 'Igradrhoz'],
+        'gradv': ['dxvx', 'dyvx', 'dzvx', 'dxvy', 'dyvy', 'dzvy', 'dxvz', 'dyvz', 'dzvz'],
+        'Igradv': ['Idxvx', 'Idyvx', 'Idzvx', 'Idxvy', 'Idyvy', 'Idzvy', 'Idxvz', 'Idyvz', 'Idzvz'],
+        'gradb': ['dxbx', 'dybx', 'dzbx', 'dxby', 'dyby', 'dzby', 'dxbz', 'dybz', 'dzbz'],
+        'Igradb': ['Idxbx', 'Idybx', 'Idzbx', 'Idxby', 'Idyby', 'Idzby', 'Idxbz', 'Idybz', 'Idzbz'],
+        'graduiso': ['graduisox', 'graduisoy', 'graduisoz'],
+        'Igraduiso': ['Igraduisox', 'Igraduisoy', 'Igraduisoz'],
+        'gradupol': ['gradupolx', 'gradupoly', 'gradupolz'],
+        'Igradupol': ['Igradupolx', 'Igradupoly', 'Igradupolz'],
+        'hdk': ['hdkx', 'hdky', 'hdkz'],
+        'Ihdk': ['Ihdkx', 'Ihdky', 'Ihdkz'],
+        'hdm': ['hdmx', 'hdmy', 'hdmz'],
+        'Ihdm': ['Ihdmx', 'Ihdmy', 'Ihdmz'],
+        'hdk2': ['hdk2x', 'hdk2y', 'hdk2z'],
+        'Ihdk2': ['Ihdk2x', 'Ihdk2y', 'Ihdk2z'],
     }
 
-    FLUX_TERMS = [
+    FLUX_TERMS = frozenset([
         "flux_dvdvdv",
         "flux_dbdbdv",
         "flux_dvdbdb",
-    ]
+    ])
     
-    SOURCE_TERMS = [
+    SOURCE_TERMS = frozenset([
         "source_dpan",
-    ]
+    ])
         
     # ========== INITIALIZATION ==========
     
@@ -121,13 +111,16 @@ class TrajectoryTermsComputer:
         physical_param : dict, optional
             Physical parameters
         traj_param : dict, optional
-            Trajectory parameters
+            Trajectory parameters including 'nbsatellite'
         """
         self.verbose = verbose
         self.physical_param = physical_param or {}
         self.traj_param = traj_param or {}
         self.nbsatellite = self.traj_param.get('nbsatellite', 1)
     
+        self._sat_names = [f'sat_{i}' for i in range(self.nbsatellite)]
+        self._sat_param_cache = {sat_name: self._extract_sat_parameters(sat_name) for sat_name in self._sat_names}
+
     # ========== PUBLIC METHODS ==========
     
     def list_required_terms(self, laws: list = None):
@@ -141,7 +134,7 @@ class TrajectoryTermsComputer:
         
         Returns:
         -------
-        set : Set of required terms
+        set : Set of required term names
         """
         if laws is None:
             laws = []
@@ -151,10 +144,10 @@ class TrajectoryTermsComputer:
         if not laws:
             return terms
         
-        # Prepare parameters for terms_and_coeffs (convert lists to scalars)
+        # Convert parameters from trajectory arrays to scalars for terms_and_coeffs()
         params_clean = self._prepare_dic_param_for_terms_and_coeffs(self.physical_param)
         
-        # Add terms from laws
+        # Collect terms from all laws
         for law_name in laws:
             if law_name in LAWS:
                 law_obj = LAWS[law_name]
@@ -168,23 +161,26 @@ class TrajectoryTermsComputer:
         """
         Compute a single term using the calc_fourier method from TERMS.
         
-        Adapted for 1D trajectory data. Handles single satellite or 4-satellite 
-        formations by extracting satellite-specific data before computation.
+        Handles single satellite or 4-satellite formations by extracting 
+        satellite-specific data before computation.
         
         Parameters:
         -----------
         term_name : str
             Name of the term to compute (e.g., "flux_dvdvdv", "bg17_vwv")
         dic_quant : dict
-            Dictionary of data with uniform structure:
-            {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
+            Data structure: {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
+            Each array contains data for multiple trajectories at multiple time points
         method : str
             Computation method ("fourier" or "incremental")
         
         Returns:
         -------
-        dict : Computed term with satellite structure
-               {sat_name: array(n_trajectories, n_points)}
+        dict : {sat_name: array(n_trajectories, n_points)}
+        
+        Raises:
+        -------
+        ValueError : If term not found in TERMS or method is unsupported
         """
         
         if term_name not in TERMS:
@@ -195,56 +191,49 @@ class TrajectoryTermsComputer:
         
         try:                        
             if self.nbsatellite == 1:
-                # Single satellite case: compute once and replicate for uniform structure
+                # Single satellite: extract sat_0 data, compute once, replicate structure
                 sat_name = 'sat_0'
-                dic_param_sat = self._extract_sat_parameters(sat_name)
+                dic_param_sat = self._sat_param_cache[sat_name]
 
                 if method == "fourier":
-                    result_sat = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
-                # elif method == "incremental":
-                #     num_trajs = len(self.traj_param['trajectories_list'])
-                #     length_traj = len(self.traj_param['trajectories_list'][0])
-                #     # For incremental method, convert dict values to list preserving order from abstract_vars
-                #     args_list = [args_sat_dict[comp] for var in abstract_vars 
-                #                 for comp in self.VARIABLE_COMPONENTS.get(var, [var])]
-                #     args_array = np.array(args_list)
-                #     result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+                    result[sat_name] = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                elif method == "incremental":
+                    result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param, 'sat_0', sat_name)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
                 
-                if type(result_sat) != np.ndarray:
-                    result_sat = np.asarray(result_sat)
-                
-                # Replicate result for uniform structure
-                result[sat_name] = result_sat
-            
-            elif self.nbsatellite == 4:
-                
-                if method == "fourier":
-                    if term_name in self.FLUX_TERMS:
+                if not isinstance(result[sat_name], np.ndarray):
+                    result[sat_name] = np.asarray(result[sat_name])
                         
+            elif self.nbsatellite == 4:
+                # 4-satellite formation: different handling for flux vs source terms
+                if method == "fourier":
+                    sat_name = 'sat_0'
+                    dic_param_sat = self._sat_param_cache[sat_name]
 
-                        result_sat = term_obj.calc_with_fourier_4sat(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                    if term_name in self.FLUX_TERMS:
+                        result[sat_name] = term_obj.calc_with_fourier_4sat(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
                     elif term_name in self.SOURCE_TERMS:
-                        sat_name = 'sat_0'  # Source terms are computed from satellite 0 data
-                        result_sat = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                        result[sat_name] = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
+                    
+                    if not isinstance(result[sat_name], np.ndarray):
+                        result[sat_name] = np.asarray(result[sat_name])
 
-                # elif method == "incremental":
-                    # num_trajs = len(self.traj_param['trajectories_list'])
-                    # length_traj = len(self.traj_param['trajectories_list'][0])
-                    # # For incremental method, convert dict values to list preserving order from abstract_vars
-                    # args_list = [args_sat_dict[comp] for var in abstract_vars 
-                    #             for comp in self.VARIABLE_COMPONENTS.get(var, [var])]
-                    # args_array = np.array(args_list)
-                    # result_sat = term_obj.calc_incremental_trajectories(args_array, num_trajs, length_traj)
+                elif method == "incremental":
+                    # Flux terms computed for all 4 satellites; source terms for sat_0 only
+                    if term_name in self.FLUX_TERMS:
+                        for sat_name in self._sat_names:
+                            result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name)
+                            if not isinstance(result[sat_name], np.ndarray):
+                                result[sat_name] = np.asarray(result[sat_name])
+                    elif term_name in self.SOURCE_TERMS:
+                        sat_name = 'sat_0'
+                        result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name)
+                        if not isinstance(result[sat_name], np.ndarray):
+                            result[sat_name] = np.asarray(result[sat_name])
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
-                if type(result_sat) != np.ndarray:
-                    result_sat = np.asarray(result_sat)
-                
-                result[sat_name] = result_sat
-            
         except Exception as e:
             if self.verbose:
                 logger.error(f"Failed to compute {term_name}: {e} for satellite {sat_name}")
@@ -257,38 +246,37 @@ class TrajectoryTermsComputer:
         Compute all terms required for the given laws.
         
         Determines the set of terms needed from law specifications, then computes
-        them from the provided quantities. Accumulated per-satellite for uniform structure.
+        them from the provided quantities.
         
         Parameters:
         -----------
         dic_quantities : dict
-            Dictionary of computed quantities with uniform structure:
-            {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
+            Data structure: {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
         laws : list[str]
             List of law names to compute terms for
         method : str
             Computation method ("fourier" or "incremental")
         filename : str
-            Output filename for the HDF5 file
+            Output HDF5 filename
+        
         Returns:
         -------
-        dict : Dictionary of computed terms with uniform structure:
-               {sat_name: {term_name: array(n_trajectories, n_points)}, ...}
+        dict : {sat_name: {term_name: array(n_trajectories, n_points)}, ...}
         """
         
         if laws is None:
             laws = []
         
-        # Get required terms
+        # Get required terms from law specifications
         required_terms = self.list_required_terms(laws)
         
         if self.verbose:
             logger.info("\n" + "-"*70)
             logger.info("FLUX AND SOURCE TERMS COMPUTATION")
             logger.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
-            logger.info(f"  Structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
+            logger.info(f"  Data structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
         
-        # Initialize result structure with satellite names
+        # Initialize result with satellite names
         satellite_names = list(dic_quantities.keys())
         result = {sat_name: {} for sat_name in satellite_names}
         
@@ -296,7 +284,7 @@ class TrajectoryTermsComputer:
             try:
                 computed = self.compute_term_from_TERMS(term_name, dic_quantities, method=method)
                 
-                # Store in uniform structure {sat_name: {term_name: array}}
+                # Store results maintaining satellite structure
                 for sat_name in computed.keys():
                     result[sat_name][term_name] = computed[sat_name]
             except Exception as e:
@@ -313,31 +301,32 @@ class TrajectoryTermsComputer:
     
     def terms_to_h5(self, result_terms: dict, filename: str = "terms_trajectory.h5"):
         """
-        Save computed terms to an HDF5 file.
-        
-        Expects uniform structure: {sat_name: {term_name: array(n_trajectories, n_points)}}
+        Save computed terms to HDF5 file.
         
         Parameters:
         -----------
         result_terms : dict
-            Dictionary of computed terms with structure:
-            {sat_name: {term_name: array(...)}, ...}
+            Data structure: {sat_name: {term_name: array(n_trajectories, n_points)}, ...}
         filename : str
-            Output filename for the HDF5 file
+            Output HDF5 filename
         """
         
         with h5py.File(filename, 'w') as f:
             for sat_name, terms_dict in result_terms.items():
-                # Create a group for each satellite
+                # Create satellite group and store all terms
                 sat_group = f.create_group(sat_name)
                 for term_name, term_value in terms_dict.items():
-                    sat_group.create_dataset(term_name, data=term_value)
+                    sat_group.create_dataset(term_name, data=term_value, 
+                        compression='gzip', compression_opts=4)
     
     # ========== PRIVATE METHODS ==========
     
     def _prepare_dic_param_for_terms_and_coeffs(self, dic_param: dict):
         """
         Prepare dic_param for terms_and_coeffs() by converting list-based parameters to scalars.
+        
+        This is necessary because terms_and_coeffs() expects scalar values rather than
+        arrays, while the trajectory data uses arrays. Takes first value for uniform parameters.
         
         Parameters:
         -----------
@@ -352,7 +341,7 @@ class TrajectoryTermsComputer:
         
         for key, value in dic_param.items():
             if isinstance(value, list):
-                # Extract first element from list (same parameter for all trajectories)
+                # Extract first element (same parameter for all trajectories)
                 params_clean[key] = value[0]
             elif isinstance(value, dict):
                 # For nbsatellite=4, extract first satellite and first trajectory
@@ -371,7 +360,10 @@ class TrajectoryTermsComputer:
     
     def _extract_sat_parameters(self, sat_name: str):
         """
-        Extract satellite-specific physical parameters.
+        Extract satellite-specific physical parameters from dic_param.
+        
+        Handles complex parameter structures: dict of satellites, lists of values,
+        and scalars. Returns parameters applicable to the given satellite.
         
         Parameters:
         -----------
@@ -387,7 +379,7 @@ class TrajectoryTermsComputer:
             if isinstance(value, dict) and sat_name in value:
                 dic_param_sat[key] = value[sat_name]
             elif isinstance(value, list):
-                dic_param_sat[key] = value[0]  # Use first element
+                dic_param_sat[key] = value[0]
             else:
                 dic_param_sat[key] = value
         
@@ -399,7 +391,7 @@ def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = N
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
-    Deprecated: Use TrajectoryTermsComputer.compute_all_terms_for_laws instead.
+    Deprecated: Use TrajectoryTermsComputer class instead.
     """
     computer = TrajectoryTermsComputer(verbose=verbose, 
                                       physical_param=physical_param, 

@@ -36,13 +36,15 @@ dic_datas = config['dic_datas']  # 1D extracted data
 grid_param = config['grid_param']
 traj_param = config['traj_param']
 physical_param = config['physical_param']
-param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_parameters.txt")
 ltraj_list = traj_param['ltraj_list']
 
 laws = config['laws']
 terms = config['terms']
 quantities = config['quantities']
 method = config['method']
+nbsatellite = traj_param['nbsatellite']
+
+param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
 
 # see_trajectory_in_space(dic_param, trajectory, nbsatellite)
 
@@ -54,8 +56,9 @@ dic_quantities = extract_and_compute_trajectory_quantities(
     laws=laws,
     terms=terms,
     quantities=quantities,
+    method=method,
+    filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_quantities.h5",
     verbose=True,
-    filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_quantities.h5"
 )
 
 # %% Compute quantities along trajectory
@@ -67,16 +70,19 @@ if traj_param['nbsatellite'] == 1:
         physical_param = physical_param,
         traj_param = traj_param,
         method = method,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5",
-        verbose=True)
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+        verbose=True
+    )
 
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
         laws=laws,
         physical_param=physical_param,
         traj_param=traj_param,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5",
-        verbose=True)
+        method=method,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+        verbose=True
+    )
 
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
@@ -89,16 +95,19 @@ elif traj_param['nbsatellite'] == 4:
         physical_param = physical_param,
         traj_param = traj_param,
         method = method,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_terms.h5",
-        verbose=True)
-    
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+        verbose=True
+    )
+
     dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
         dic_terms=dic_terms,
         laws=laws,
         physical_param=physical_param,
         traj_param=traj_param,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_laws.h5",
-        verbose=True)
+        method=method,
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+        verbose=True
+    )
     
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")

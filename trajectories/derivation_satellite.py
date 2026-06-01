@@ -175,26 +175,13 @@ def divergence_4satellite(dic_quant, quantity_name, traj_param):
         2D array (n_trajectories, n_points)
     """
 
-    dR1 = traj_param['dR1']  # Vector from satellite 0 to satellite 1
-    dR2 = traj_param['dR2']  # Vector from satellite 0 to satellite 2
-    dR3 = traj_param['dR3']  # Vector from satellite 0 to satellite 3
+    dR1 = traj_param['dR1']  # Vector from satellite 0 to satellite 1 in physical units 
+    dR2 = traj_param['dR2']  # Vector from satellite 0 to satellite 2 in physical units
+    dR3 = traj_param['dR3']  # Vector from satellite 0 to satellite 3 in physical units
     
-    if traj_param['trajectory_method'] == 'linear_x' and quantity_name.split('_')[0] == 'flux':
-        alpha1 = np.roll(dic_quant['sat_1'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
-        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
-    elif traj_param['trajectory_method'] == 'linear_y' and quantity_name.split('_')[0] == 'flux':
-        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha2 = np.roll(dic_quant['sat_2'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
-        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
-    elif traj_param['trajectory_method'] == 'linear_z' and quantity_name.split('_')[0] == 'flux':
-        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha3 = np.roll(dic_quant['sat_3'][quantity_name], -1, axis=-1) - dic_quant['sat_0'][quantity_name]
-    else:
-        alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
-        alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    alpha1 = dic_quant['sat_1'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
+    alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
 
     divalpha = np.einsum('i...,i...', alpha1, np.cross(dR2, dR3)[:, np.newaxis, np.newaxis]) + \
                 np.einsum('i...,i...', alpha2, np.cross(dR3, dR1)[:, np.newaxis, np.newaxis]) + \

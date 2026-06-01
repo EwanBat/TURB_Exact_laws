@@ -89,7 +89,7 @@ class SourceDpan(AbstractTerm):
                                       dxvy, dyvy, dzvy,
                                       dxvz, dyvz, dzvz, traj=traj)
 
-    def variables(self, nbsatellite: int = 1) -> List[str]:
+    def variables(self, nbsatellite: int = 1, method=None) -> List[str]:
         return ["Ipgyr", "Ipm", "gradv", "Ib"]
     
     def print_expr(self):

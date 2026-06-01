@@ -531,7 +531,6 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     trajectories_list = []
     tangents_list = []
     ltraj_list = []
-    trajectory_data_list = []
     
     # Generate trajectory with interpolation
     if traj_param['trajectory_method'] == 'linear_x':
@@ -541,6 +540,9 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     elif traj_param['trajectory_method'] == 'linear_z':
         t = np.arange(Ninterp * N[2]) / Ninterp
     
+    # Get dimensions from first trajectory
+    n_points = len(t)
+
     if nbsatellite == 4: # Define satellite offsets for 4-satellite configuration
         dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c']  # Convert gap from indices to physical units
         dR2 = np.array([0, gap_satellite, 0]) * grid_param['c']
@@ -549,53 +551,30 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         traj_param['dR2'] = dR2
         traj_param['dR3'] = dR3
 
+    # Initialize output structure: {sat_name: {var_name: array(n_trajectories, n_points)}}
+    dic_datas_combined = {"sat_"+str(i): {var : np.zeros((n_trajectories, n_points)) for var in dic_datas_3d.keys()} for i in range(nbsatellite)}
+
     for idx, trajectory_kwargs in enumerate(trajectory_kwargs_list):
-        trajectory = trajectory_func(t, N=N, Ninterp=Ninterp, **trajectory_kwargs)
-        trajectories_list.append(np.copy(trajectory))
+        trajectories_list.append(trajectory_func(t, N=N, Ninterp=Ninterp, **trajectory_kwargs))
            
         # Compute normalized tangent vectors and physical coordinates
-        tangents = _compute_tangent_vectors(trajectory_func, t, grid_param, traj_param, **trajectory_kwargs)
-        tangents_list.append(np.copy(tangents))
+        tangents_list.append(_compute_tangent_vectors(trajectory_func, t, grid_param, traj_param, **trajectory_kwargs))
 
-        ltraj = _compute_trajectory_coordinates(trajectory, grid_param, tangents)
-        ltraj_list.append(np.copy(ltraj))
+        ltraj_list.append(_compute_trajectory_coordinates(trajectories_list[-1], grid_param, tangents_list[-1]))
 
         # Extract quantities along trajectory
         trajectory_data = extract_quantities_along_trajectory(
             dic_datas_3d,
-            trajectory,
+            trajectories_list[-1],
             traj_param,
             grid_param,
         )
-        trajectory_data_list.append(trajectory_data)
-
-    # Get dimensions from first trajectory
-    first_data = trajectory_data_list[0]
-    first_satellite = list(first_data.keys())[0]  # Get first satellite name (e.g., 'sat_0')
-    first_var = list(first_data[first_satellite].keys())[0]  # Get first variable
-    n_points = len(trajectory_data_list[0][first_satellite][first_var])
-    
-    # Initialize output structure: {sat_name: {var_name: array(n_trajectories, n_points)}}
-    dic_datas_combined = {}
-    
-    # Get all satellite names
-    satellite_names = list(first_data.keys())
-    
-    # Get all variable names (same for all satellites)
-    var_names = list(first_data[first_satellite].keys())
-    
-    # Initialize arrays for each satellite and variable
-    for sat_name in satellite_names:
-        dic_datas_combined[sat_name] = {}
-        for var_name in var_names:
-            dtype = trajectory_data_list[0][sat_name][var_name].dtype
-            dic_datas_combined[sat_name][var_name] = np.zeros((n_trajectories, n_points), dtype=dtype)
-    
-    # Fill arrays with data from all trajectories
-    for traj_idx, trajectory_data in enumerate(trajectory_data_list):
-        for sat_name in satellite_names:
-            for var_name in var_names:
-                dic_datas_combined[sat_name][var_name][traj_idx] = trajectory_data[sat_name][var_name]
+        for sat_name in trajectory_data.keys():
+            for var_name in trajectory_data[sat_name].keys():
+                if var_name not in dic_datas_combined[sat_name]:
+                    dic_datas_combined[sat_name][var_name] = []
+                dic_datas_combined[sat_name][var_name][idx, :] = trajectory_data[sat_name][var_name]
+        del trajectory_data 
     
     # Store trajectory metadata and geometry
     traj_param['trajectories_list'] = np.stack(trajectories_list)
@@ -608,6 +587,6 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         logging.info(f"  [OK] Processed {n_trajectories} trajectory/trajectories successfully")
         logging.info(f"    Data structure: {{sat_name: {{var_name: array(n_trajectories, n_points)}}}}")
         logging.info(f"    Data shape: ({n_trajectories}, {n_points})")
-        logging.info(f"    Satellites: {satellite_names}")
+        logging.info(f"    Satellites: {', '.join(dic_datas_combined.keys())}")
     
     return dic_datas_combined, trajectories_list

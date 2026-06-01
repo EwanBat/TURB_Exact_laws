@@ -14,8 +14,8 @@ class Pp98(AbstractLaw):
         coeffs["div_flux_dvdbdb"] = physical_params["rho_mean"] / 2
         return self.terms, coeffs
 
-    def variables(self, nbsatellite: int = 1) -> List[str]:
-        return self.list_variables(self.terms, nbsatellite=nbsatellite)
+    def variables(self, nbsatellite: int = 1, method: str = None) -> List[str]:
+        return self.list_variables(self.terms, nbsatellite=nbsatellite, method=method)
 
 def load():
     return Pp98()
