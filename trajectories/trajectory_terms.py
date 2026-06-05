@@ -100,7 +100,7 @@ class TrajectoryTermsComputer:
         
     # ========== INITIALIZATION ==========
     
-    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None):
+    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None, max_workers: int = 2):
         """
         Initialize the trajectory terms computer.
         
@@ -112,10 +112,13 @@ class TrajectoryTermsComputer:
             Physical parameters
         traj_param : dict, optional
             Trajectory parameters including 'nbsatellite'
+        max_workers : int
+            Maximum number of threads for ThreadPoolExecutor (default: 2)
         """
         self.verbose = verbose
         self.physical_param = physical_param or {}
         self.traj_param = traj_param or {}
+        self.max_workers = max_workers
         self.nbsatellite = self.traj_param.get('nbsatellite', 1)
     
         self._sat_names = [f'sat_{i}' for i in range(self.nbsatellite)]
@@ -198,7 +201,7 @@ class TrajectoryTermsComputer:
                 if method == "fourier":
                     result[sat_name] = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
                 elif method == "incremental":
-                    result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param, 'sat_0', sat_name)
+                    result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param, 'sat_0', sat_name, max_workers=self.max_workers)
                 else:
                     raise ValueError(f"Unsupported method: {method}")
                 
@@ -223,12 +226,12 @@ class TrajectoryTermsComputer:
                     # Flux terms computed for all 4 satellites; source terms for sat_0 only
                     if term_name in self.FLUX_TERMS:
                         for sat_name in self._sat_names:
-                            result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name)
+                            result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name, max_workers=self.max_workers)
                             if not isinstance(result[sat_name], np.ndarray):
                                 result[sat_name] = np.asarray(result[sat_name])
                     elif term_name in self.SOURCE_TERMS:
                         sat_name = 'sat_0'
-                        result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name)
+                        result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name, max_workers=self.max_workers)
                         if not isinstance(result[sat_name], np.ndarray):
                             result[sat_name] = np.asarray(result[sat_name])
                 else:
@@ -387,7 +390,7 @@ class TrajectoryTermsComputer:
     
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False):
+def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = 2):
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
@@ -395,5 +398,6 @@ def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = N
     """
     computer = TrajectoryTermsComputer(verbose=verbose, 
                                       physical_param=physical_param, 
-                                      traj_param=traj_param)
+                                      traj_param=traj_param,
+                                      max_workers=max_workers)
     return computer.compute_all_terms_for_laws(dic_quantities, laws, method, filename)

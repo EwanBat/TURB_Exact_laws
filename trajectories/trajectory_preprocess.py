@@ -246,6 +246,7 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
         input_folder = config["INPUT_DATA"].get("path", input_folder)
         cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
         sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
+        max_workers = config["INPUT_DATA"].getint("max_workers", 2)
     except Exception as e:
         logging.error(f"Error reading INPUT_DATA: {e}")
         raise
@@ -259,7 +260,7 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
     
     return (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
             nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
-            trajectory_method, Ninterp, step_traj)
+            trajectory_method, Ninterp, step_traj, max_workers)
 
 def preprocess_trajectory_from_ini(ini_file: str,
                                    input_folder: str = "",
@@ -300,7 +301,7 @@ def preprocess_trajectory_from_ini(ini_file: str,
     try:
         (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
          nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
-         trajectory_method, Ninterp, step_traj) = load_config_from_ini(ini_file, input_folder)
+         trajectory_method, Ninterp, step_traj, max_workers) = load_config_from_ini(ini_file, input_folder)
     except Exception as e:
         logging.error(f"Error loading configuration: {e}")
         raise
@@ -431,6 +432,7 @@ def preprocess_trajectory_from_ini(ini_file: str,
             'traj_param': traj_param,
             'physical_param': physical_param,
             'trajectory_name': trajectory_func.__name__.split('_', 1)[-1],  
-            'name_output': name_output  
+            'name_output': name_output,
+            'max_workers': max_workers
         }
 

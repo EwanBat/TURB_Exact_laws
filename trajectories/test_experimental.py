@@ -8,7 +8,7 @@ os.environ['THREADPOOL_MAX_WORKERS'] = '2'  # Limit ThreadPoolExecutor workers
 import numpy as np
 import logging
 from datetime import datetime
-from trajectories.trajectory_preprocess import preprocess_trajectory_from_ini, param_to_txt
+from trajectories.trajectory_experimental import preprocess_experimental_trajectory_from_ini, param_to_txt
 from trajectories.trajectory_quantities import extract_and_compute_trajectory_quantities
 from trajectories.trajectory_terms import compute_all_terms_for_laws
 from trajectories.trajectory_laws import compute_laws_terms_with_coefficients
@@ -17,7 +17,7 @@ import time
 time_start = time.time()
 
 # Configure logging with a better format
-log_filename = f"test_1satellite_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
+log_filename = f"log_traj_exp_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log"
 logging.basicConfig(
     filename=log_filename,
     level=logging.INFO,
@@ -26,14 +26,31 @@ logging.basicConfig(
 )
 
 # %% Configuration
-config_file = "trajectories/input_satellite.ini"
+config_file = "trajectories/input_experimental.ini"
 
 # %% Preprocess trajectory
 logging.info("\n" + "="*70)
 logging.info("PREPROCESSING TRAJECTORY")
 
-config = preprocess_trajectory_from_ini(
+x = [np.random.rand(1000) for _ in range(4)]  # Replace with actual data loading
+y = [np.random.rand(1000) for _ in range(4)]
+z = [np.random.rand(1000) for _ in range(4)]
+bx = [np.random.rand(1000) for _ in range(4)]
+by = [np.random.rand(1000) for _ in range(4)]
+bz = [np.random.rand(1000) for _ in range(4)]
+vx = [np.random.rand(1000) for _ in range(4)]
+vy = [np.random.rand(1000) for _ in range(4)]
+vz = [np.random.rand(1000) for _ in range(4)]
+rho = [np.random.rand(1000) for _ in range(4)]
+ppar = [np.random.rand(1000) for _ in range(4)]
+pperp = [np.random.rand(1000) for _ in range(4)]
+
+config = preprocess_experimental_trajectory_from_ini(
     ini_file=config_file,
+    x=x, y=y, z=z,
+    bx=bx, by=by, bz=bz,
+    vx=vx, vy=vy, vz=vz,
+    rho=rho, ppar=ppar, pperp=pperp,
     verbose=True
 )
 
@@ -51,9 +68,7 @@ quantities = config['quantities']
 method = config['method']
 nbsatellite = traj_param['nbsatellite']
 
-param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/parameters/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
-
-# see_trajectory_in_space(dic_param, trajectory, nbsatellite)
+param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
 
 dic_quantities = extract_and_compute_trajectory_quantities(
     dic_datas, 
@@ -64,7 +79,7 @@ dic_quantities = extract_and_compute_trajectory_quantities(
     terms=terms,
     quantities=quantities,
     method=method,
-    filename='result_traj/quantities/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_quantities.h5",
+    filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_quantities.h5",
     verbose=True,
 )
 
@@ -78,7 +93,7 @@ if traj_param['nbsatellite'] == 1:
         traj_param = traj_param,
         method = method,
         max_workers = max_workers,
-        filename = 'result_traj/terms/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
         verbose=True
     )
 
@@ -88,7 +103,7 @@ if traj_param['nbsatellite'] == 1:
         physical_param=physical_param,
         traj_param=traj_param,
         method=method,
-        filename = 'result_traj/laws/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
         verbose=True
     )
 
@@ -104,7 +119,7 @@ elif traj_param['nbsatellite'] == 4:
         traj_param = traj_param,
         method = method,
         max_workers = max_workers,
-        filename = 'result_traj/terms/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
         verbose=True
     )
 
@@ -114,7 +129,7 @@ elif traj_param['nbsatellite'] == 4:
         physical_param=physical_param,
         traj_param=traj_param,
         method=method,
-        filename = 'result_traj/laws/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
         verbose=True
     )
     
