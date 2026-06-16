@@ -18,9 +18,11 @@ Key design: All data arrays maintain (n_trajectories, n_points) shape for vector
 import numpy as np
 import h5py
 import logging
+import scipy
 from exact_laws.preprocessing.quantities import QUANTITIES
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
+
 
 logger = logging.getLogger(__name__)
 
@@ -185,15 +187,9 @@ class TrajectoryQuantitiesComputer:
         if self.verbose:
             logger.info(f"  Quantities to compute: {len(available_quantities)}")
             logger.info(f"  {available_quantities}")
-        
-        result = self._compute_all_quantities(dic_datas, available_quantities)
-        
-        if self.verbose:
-            logger.info(f"  [OK] All quantities computed successfully")
-            logger.info(result['sat_0'].keys())
-        
+                
         # self.quantities_to_h5(result, filename)
-        return result
+        return self._compute_all_quantities(dic_datas, available_quantities)
     
     def list_computable_quantities(self, dic_quant: dict, laws=None, terms=None, 
                                    quantities=None, method:str = None):
@@ -319,8 +315,28 @@ class TrajectoryQuantitiesComputer:
                     if self.verbose:
                         logger.error(f"Failed to compute {quantity_name}: {str(e)}")
 
+        if self.verbose:
+            logger.info(f"  [OK] All quantities computed successfully")
+            logger.info(dic_quantities['sat_0'].keys())
+
+        if self.traj_param['trajectory_method'] == 'linear_x':
+            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][0])
+        elif self.traj_param['trajectory_method'] == 'linear_y':
+            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][1])
+        elif self.traj_param['trajectory_method'] == 'linear_z':
+            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][2])
+
         return dic_quantities
     
+    def butterworth_filtering(self, dic_quantities, cutoff_freq: float, order: int, fs: float = 1.0):
+        """
+        Apply a Butterworth low-pass filter to all quantities in dic_quantities.
+        """
+        b, a = scipy.signal.butter(order, cutoff_freq, btype='low', fs=fs)
+        for sat_name, sat_data in dic_quantities.items():
+            for var_name, data_array in sat_data.items():
+                dic_quantities[sat_name][var_name] = scipy.signal.filtfilt(b, a, data_array, axis=1, method="gust")
+
     def _compute_quantity_vectorized(self, quantity_name: str, dic_quant_sat: dict):
         """
         Compute a single quantity for vectorized trajectory arrays.

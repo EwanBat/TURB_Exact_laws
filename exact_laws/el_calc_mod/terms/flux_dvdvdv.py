@@ -40,12 +40,12 @@ class FluxDvdvdv(AbstractTerm):
         self.expry = (dvx * dvx + dvy * dvy + dvz * dvz) * dvy
         self.exprz = (dvx * dvx + dvy * dvy + dvz * dvz) * dvz
     
-    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, traj=False, **kwarg) -> List[float]:
-        if traj:
-            return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz)
-        else:
-            return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz)
+    def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, **kwarg) -> List[float]:
+        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz)
     
+    def calc_incr_traj(self, n_points, n_trajectories, vx, vy, vz, **kwarg):
+        return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, n_points, n_trajectories, vx, vy, vz)
+
     def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, traj=traj)
 
@@ -123,8 +123,8 @@ def calc_in_point_with_sympy_traj(t, tp, vx, vy, vz,
                                   fx=njit(FluxDvdvdv().fctx),
                                   fy=njit(FluxDvdvdv().fcty),
                                   fz=njit(FluxDvdvdv().fctz)):
-    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
-    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+    vxP, vyP, vzP = vx[:,tp], vy[:,tp], vz[:,tp]
+    vxNP, vyNP, vzNP = vx[:,t], vy[:,t], vz[:,t]
 
     outx = fx(vxP, vyP, vzP, vxNP, vyNP, vzNP)
     outy = fy(vxP, vyP, vzP, vxNP, vyNP, vzNP)

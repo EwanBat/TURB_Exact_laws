@@ -246,7 +246,7 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
         input_folder = config["INPUT_DATA"].get("path", input_folder)
         cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
         sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
-        max_workers = config["INPUT_DATA"].getint("max_workers", 2)
+        max_workers = config["INPUT_DATA"].getint("max_workers", np.nan)
     except Exception as e:
         logging.error(f"Error reading INPUT_DATA: {e}")
         raise
@@ -317,6 +317,8 @@ def preprocess_trajectory_from_ini(ini_file: str,
         logging.info(f"  Sim type:          {sim_type}")
         logging.info(f"  Trajectory method: {trajectory_method}")
         logging.info(f"  N trajectory sets: {len(trajectory_kwargs_list)}")
+        logging.info(f"  N interp points:   {Ninterp}")
+        logging.info(f"  N threads:         {max_workers}")
     
     # Load OCA data (3D)
     try:

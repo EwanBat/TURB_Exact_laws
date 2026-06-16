@@ -56,21 +56,13 @@ class SourceDpan(AbstractTerm):
              Ibx, Iby, Ibz,
              dxvx, dyvx, dzvx,
              dxvy, dyvy, dzvy,
-             dxvz, dyvz, dzvz,
-             traj=False, **kwarg) -> (float):
+             dxvz, dyvz, dzvz, **kwarg) -> (float):
         #return calc_source_with_numba(calc_in_point, *vector, *cube_size,
                                     #   Ipperp, Ippar, Ipm,
                                     #   Ibx, Iby, Ibz,
                                     #   dxvx, dyvx, dzvx,
                                     #   dxvy, dyvy, dzvy,
                                     #   dxvz, dyvz, dzvz)
-        if traj:
-            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size,
-                                      Ipperp, Ippar, Ipm,
-                                      Ibx, Iby, Ibz,
-                                      dxvx, dyvx, dzvx,
-                                      dxvy, dyvy, dzvy,
-                                      dxvz, dyvz, dzvz)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
                                       Ipperp, Ippar, Ipm,
                                       Ibx, Iby, Ibz,
@@ -78,6 +70,17 @@ class SourceDpan(AbstractTerm):
                                       dxvy, dyvy, dzvy,
                                       dxvz, dyvz, dzvz)
     
+    def calc_incr_traj(self, n_points, n_trajectories, Ipperp, Ippar, Ipm,
+                       Ibx, Iby, Ibz,
+                       dxvx, dyvx, dzvx,
+                       dxvy, dyvy, dzvy,
+                       dxvz, dyvz, dzvz, **kwarg):
+        return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, n_points, n_trajectories, Ipperp, Ippar, Ipm,
+                                           Ibx, Iby, Ibz,
+                                           dxvx, dyvx, dzvx,
+                                           dxvy, dyvy, dzvy,
+                                           dxvz, dyvz, dzvz)
+
     def calc_fourier(self, Ipperp, Ippar, Ipm,
                                       Ibx, Iby, Ibz,
                                       dxvx, dyvx, dzvx,
@@ -138,16 +141,19 @@ def calc_in_point_with_sympy_traj(t, tp,
                      dxvy, dyvy, dzvy,
                      dxvz, dyvz, dzvz,  
                      f=njit(SourceDpan().fct)):
-    IpperpP, IpparP, IpmP = Ipperp[tp], Ippar[tp], Ipm[tp]
-    IpperpNP, IpparNP, IpmNP = Ipperp[t], Ippar[t], Ipm[t]
-    IbxP, IbyP, IbzP = Ibx[tp], Iby[tp], Ibz[tp]
-    IbxNP, IbyNP, IbzNP = Ibx[t], Iby[t], Ibz[t]
-    dxvxP, dyvxP, dzvxP = dxvx[tp], dyvx[tp], dzvx[tp]
-    dxvyP, dyvyP, dzvyP = dxvy[tp], dyvy[tp], dzvy[tp]
-    dxvzP, dyvzP, dzvzP = dxvz[tp], dyvz[tp], dzvz[tp]
-    dxvxNP, dyvxNP, dzvxNP = dxvx[t], dyvx[t], dzvx[t]
-    dxvyNP, dyvyNP, dzvyNP = dxvy[t], dyvy[t], dzvy[t]
-    dxvzNP, dyvzNP, dzvzNP = dxvz[t], dyvz[t], dzvz[t]
+    IpperpP, IpparP, IpmP = Ipperp[:,tp], Ippar[:,tp], Ipm[:,tp]
+    IpperpNP, IpparNP, IpmNP = Ipperp[:,t], Ippar[:,t], Ipm[:,t]
+
+    IbxP, IbyP, IbzP = Ibx[:,tp], Iby[:,tp], Ibz[:,tp]
+    IbxNP, IbyNP, IbzNP = Ibx[:,t], Iby[:,t], Ibz[:,t]
+
+    dxvxP, dyvxP, dzvxP = dxvx[:,tp], dyvx[:,tp], dzvx[:,tp]
+    dxvyP, dyvyP, dzvyP = dxvy[:,tp], dyvy[:,tp], dzvy[:,tp]
+    dxvzP, dyvzP, dzvzP = dxvz[:,tp], dyvz[:,tp], dzvz[:,tp]
+    
+    dxvxNP, dyvxNP, dzvxNP = dxvx[:,t], dyvx[:,t], dzvx[:,t]
+    dxvyNP, dyvyNP, dzvyNP = dxvy[:,t], dyvy[:,t], dzvy[:,t]
+    dxvzNP, dyvzNP, dzvzNP = dxvz[:,t], dyvz[:,t], dzvz[:,t]
 
     return (f(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
         dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,

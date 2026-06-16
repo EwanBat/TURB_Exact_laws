@@ -7,8 +7,10 @@ Encapsulated in TrajectoryTermsComputer class for better parameter management.
 """
 
 import numpy as np
+from numba import njit, prange, get_num_threads, set_num_threads
 import logging
 import h5py
+import statsmodels.api as sm
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
 
@@ -100,7 +102,7 @@ class TrajectoryTermsComputer:
         
     # ========== INITIALIZATION ==========
     
-    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None, max_workers: int = 2):
+    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None, max_workers: int = np.nan):
         """
         Initialize the trajectory terms computer.
         
@@ -159,90 +161,6 @@ class TrajectoryTermsComputer:
                 terms.update(law_terms)
         
         return terms
-    
-    def compute_term_from_TERMS(self, term_name: str, dic_quant: dict, method: str = None):
-        """
-        Compute a single term using the calc_fourier method from TERMS.
-        
-        Handles single satellite or 4-satellite formations by extracting 
-        satellite-specific data before computation.
-        
-        Parameters:
-        -----------
-        term_name : str
-            Name of the term to compute (e.g., "flux_dvdvdv", "bg17_vwv")
-        dic_quant : dict
-            Data structure: {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
-            Each array contains data for multiple trajectories at multiple time points
-        method : str
-            Computation method ("fourier" or "incremental")
-        
-        Returns:
-        -------
-        dict : {sat_name: array(n_trajectories, n_points)}
-        
-        Raises:
-        -------
-        ValueError : If term not found in TERMS or method is unsupported
-        """
-        
-        if term_name not in TERMS:
-            raise ValueError(f"Term '{term_name}' not found in TERMS")
-        
-        term_obj = TERMS[term_name]
-        result = {}
-        
-        try:                        
-            if self.nbsatellite == 1:
-                # Single satellite: extract sat_0 data, compute once, replicate structure
-                sat_name = 'sat_0'
-                dic_param_sat = self._sat_param_cache[sat_name]
-
-                if method == "fourier":
-                    result[sat_name] = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
-                elif method == "incremental":
-                    result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param, 'sat_0', sat_name, max_workers=self.max_workers)
-                else:
-                    raise ValueError(f"Unsupported method: {method}")
-                
-                if not isinstance(result[sat_name], np.ndarray):
-                    result[sat_name] = np.asarray(result[sat_name])
-                        
-            elif self.nbsatellite == 4:
-                # 4-satellite formation: different handling for flux vs source terms
-                if method == "fourier":
-                    sat_name = 'sat_0'
-                    dic_param_sat = self._sat_param_cache[sat_name]
-
-                    if term_name in self.FLUX_TERMS:
-                        result[sat_name] = term_obj.calc_with_fourier_4sat(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
-                    elif term_name in self.SOURCE_TERMS:
-                        result[sat_name] = term_obj.calc_fourier(**dic_quant[sat_name], dic_param=dic_param_sat, traj=True)
-                    
-                    if not isinstance(result[sat_name], np.ndarray):
-                        result[sat_name] = np.asarray(result[sat_name])
-
-                elif method == "incremental":
-                    # Flux terms computed for all 4 satellites; source terms for sat_0 only
-                    if term_name in self.FLUX_TERMS:
-                        for sat_name in self._sat_names:
-                            result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name, max_workers=self.max_workers)
-                            if not isinstance(result[sat_name], np.ndarray):
-                                result[sat_name] = np.asarray(result[sat_name])
-                    elif term_name in self.SOURCE_TERMS:
-                        sat_name = 'sat_0'
-                        result[sat_name] = term_obj.calc_incremental_trajectories(dic_quant, self.traj_param,'sat_0', sat_name, max_workers=self.max_workers)
-                        if not isinstance(result[sat_name], np.ndarray):
-                            result[sat_name] = np.asarray(result[sat_name])
-                else:
-                    raise ValueError(f"Unsupported method: {method}")
-
-        except Exception as e:
-            if self.verbose:
-                logger.error(f"Failed to compute {term_name}: {e} for satellite {sat_name}")
-            raise
-        
-        return result
 
     def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, method: str = None, filename: str = "terms_trajectory.h5"):
         """
@@ -280,19 +198,79 @@ class TrajectoryTermsComputer:
             logger.info(f"  Data structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
         
         # Initialize result with satellite names
-        satellite_names = list(dic_quantities.keys())
-        result = {sat_name: {} for sat_name in satellite_names}
+        result = {sat_name: {} for sat_name in self._sat_names}
         
-        for term_name in required_terms:
-            try:
-                computed = self.compute_term_from_TERMS(term_name, dic_quantities, method=method)
-                
-                # Store results maintaining satellite structure
-                for sat_name in computed.keys():
-                    result[sat_name][term_name] = computed[sat_name]
-            except Exception as e:
-                if self.verbose:
-                    logger.error(f"Failed to compute {term_name}: {str(e)}")
+        if method == "incremental":
+            if self.nbsatellite == 1:
+                try:
+                    merged_quantities = {}  # Initialize an array to hold merged quantities for each trajectory and point
+                    for quantity in dic_quantities['sat_0'].keys():
+                        merged_quantities.update({quantity: np.concatenate((
+                            dic_quantities['sat_0'][quantity],
+                            dic_quantities['sat_0'][quantity]
+                            ), axis=1)}) 
+                    
+                    for term_name in required_terms:
+                        term_obj = TERMS[term_name]
+                        result['sat_0'][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+
+                    logger.info(f"  [OK] Terms computed for satellite sat_0")
+                except Exception as e:
+                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    raise
+            
+            elif self.nbsatellite == 4:
+                try:
+                    sat1 = 'sat_0'  # Reference satellite for merging quantities
+                    for sat2 in self._sat_names:
+                        merged_quantities = {}  # Initialize an array to hold merged quantities for each trajectory and point
+                        for quantity in dic_quantities[sat1].keys():
+                            if quantity in dic_quantities[sat2]:
+                                merged_quantities.update({quantity: np.concatenate((
+                                    dic_quantities[sat1][quantity],
+                                    dic_quantities[sat2][quantity]
+                                    ), axis=1)}) # Merge along points axis (axis=1) to create arrays of shape (n_trajectories, 2*n_points)
+                        set_num_threads(self.max_workers)  # Set numba to use the specified number of threads
+                        for term_name in required_terms:
+                            term_obj = TERMS[term_name]
+                            if term_name in self.FLUX_TERMS:
+                                result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                                
+                            elif term_name in self.SOURCE_TERMS and sat2 == 'sat_0':  # Compute source terms only for reference satellite
+                                result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+
+                        logger.info(f"  [OK] Terms computed for satellite {sat2}")
+                except Exception as e:
+                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    raise
+
+        elif method == "fourier":
+            if self.nbsatellite == 1:
+                try:
+                    for term_name in required_terms:
+                        term_obj = TERMS[term_name]
+                        result['sat_0'][term_name] = term_obj.calc_fourier(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                        if not isinstance(result['sat_0'][term_name], np.ndarray):
+                            result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
+                    logger.info(f"  [OK] Terms computed for satellite sat_0")
+                except Exception as e:
+                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    raise
+        
+            elif self.nbsatellite == 4:
+                try:
+                    for term_name in required_terms:
+                        term_obj = TERMS[term_name]
+                        if term_name in self.FLUX_TERMS:
+                            result['sat_0'][term_name] = term_obj.calc_with_fourier_4sat(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                        elif term_name in self.SOURCE_TERMS:
+                            result['sat_0'][term_name] = term_obj.calc_fourier(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                        if not isinstance(result['sat_0'][term_name], np.ndarray):
+                            result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
+                    logger.info(f"  [OK] Terms computed for satellite sat_0")
+                except Exception as e:
+                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    raise
         
         if self.verbose:
             logger.info(f"  [OK] All {len(required_terms)} terms computed successfully:")
@@ -302,6 +280,18 @@ class TrajectoryTermsComputer:
 
         return result
     
+    @njit(parallel=True)
+    def calc_incremental_trajectories(self, result:dict[np.ndarray], merged_quantities: dict, n_trajectories:int, n_points:int):
+
+        for dl in prange(n_points):
+            for t in prange(n_points):
+                tp = t + (n_points + dl) - n_points * (t + n_points + dl >= 2 * n_points)
+                for term_name, term_obj in TERMS.items():
+                    if term_name in self.FLUX_TERMS:
+                        result[term_name][[0, 1, 2], :, dl] += term_obj.calc_in_point_with_sympy_traj(t, tp, **merged_quantities)
+                    elif term_name in self.SOURCE_TERMS:
+                        result[term_name][:,dl] += term_obj.calc_in_point_with_sympy_traj(t, tp, **merged_quantities)
+
     def terms_to_h5(self, result_terms: dict, filename: str = "terms_trajectory.h5"):
         """
         Save computed terms to HDF5 file.
@@ -390,7 +380,7 @@ class TrajectoryTermsComputer:
     
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = 2):
+def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = np.nan):
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
