@@ -1,5 +1,3 @@
-# %% Configure numba environment BEFORE importing modules
-
 # %% import libraries
 import os
 import numpy as np
@@ -73,6 +71,7 @@ if traj_param['nbsatellite'] == 1:
     dic_terms = compute_all_terms_for_laws(
         dic_quantities = dic_quantities, 
         laws = laws,
+        grid_param = grid_param,
         physical_param = physical_param,
         traj_param = traj_param,
         method = method,
@@ -105,6 +104,7 @@ elif traj_param['nbsatellite'] == 4:
     dic_terms = compute_all_terms_for_laws(
         dic_quantities = dic_quantities, 
         laws = laws,
+        grid_param = grid_param,
         physical_param = physical_param,
         traj_param = traj_param,
         method = method,

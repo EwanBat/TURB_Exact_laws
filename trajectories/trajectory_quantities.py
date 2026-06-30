@@ -147,7 +147,7 @@ class TrajectoryQuantitiesComputer:
     
     def extract_and_compute(self, dic_datas: dict, 
                             laws=None, terms=None, quantities=None, method:str = None,
-                            filename: str = "computed_quantities.h5"):
+                            filename: str = None):
         """
         Compute all required quantities for vectorized trajectories.
         
@@ -189,7 +189,7 @@ class TrajectoryQuantitiesComputer:
             logger.info(f"  {available_quantities}")
                 
         # self.quantities_to_h5(result, filename)
-        return self._compute_all_quantities(dic_datas, available_quantities)
+        return self._compute_all_quantities(dic_datas, available_quantities, filename)
     
     def list_computable_quantities(self, dic_quant: dict, laws=None, terms=None, 
                                    quantities=None, method:str = None):
@@ -232,7 +232,7 @@ class TrajectoryQuantitiesComputer:
     
     # ========== PRIVATE METHODS ==========
         
-    def _compute_all_quantities(self, dic_datas: dict, available_quantities: list):
+    def _compute_all_quantities(self, dic_datas: dict, available_quantities: list, filename: str):
         """
         Compute all quantities using vectorized operations.
         Structure is preserved: {sat_name: {var_name: array(n_traj, n_pts)}}
@@ -319,23 +319,9 @@ class TrajectoryQuantitiesComputer:
             logger.info(f"  [OK] All quantities computed successfully")
             logger.info(dic_quantities['sat_0'].keys())
 
-        if self.traj_param['trajectory_method'] == 'linear_x':
-            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][0])
-        elif self.traj_param['trajectory_method'] == 'linear_y':
-            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][1])
-        elif self.traj_param['trajectory_method'] == 'linear_z':
-            self.butterworth_filtering(dic_quantities, cutoff_freq=0.6, order=8, fs=1/self.grid_param['c'][2])
+        self.quantities_to_h5(dic_quantities, filename)
 
         return dic_quantities
-    
-    def butterworth_filtering(self, dic_quantities, cutoff_freq: float, order: int, fs: float = 1.0):
-        """
-        Apply a Butterworth low-pass filter to all quantities in dic_quantities.
-        """
-        b, a = scipy.signal.butter(order, cutoff_freq, btype='low', fs=fs)
-        for sat_name, sat_data in dic_quantities.items():
-            for var_name, data_array in sat_data.items():
-                dic_quantities[sat_name][var_name] = scipy.signal.filtfilt(b, a, data_array, axis=1, method="gust")
 
     def _compute_quantity_vectorized(self, quantity_name: str, dic_quant_sat: dict):
         """

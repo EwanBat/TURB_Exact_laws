@@ -385,7 +385,7 @@ def preprocess_trajectory_from_ini(ini_file: str,
         logging.info("PROCESSING TRAJECTORIES")
 
     # Generate all trajectories and extract field data
-    dic_datas, trajectories_list = combine_multiple_trajectories(
+    dic_datas = combine_multiple_trajectories(
         trajectory_func,
         dic_datas_3d,
         traj_param,
@@ -422,7 +422,7 @@ def preprocess_trajectory_from_ini(ini_file: str,
         
     if verbose:
         logging.info(f"\n  [OK] Extraction complete: {len(dic_datas)} field quantities")
-        logging.info(f"    Total trajectories processed: {len(trajectories_list)}")
+        logging.info(f"    Total trajectories processed: {len(traj_param['trajectories_list'])}")
 
     return {
             'laws': laws,

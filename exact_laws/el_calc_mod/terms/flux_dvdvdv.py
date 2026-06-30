@@ -2,9 +2,10 @@ from typing import List
 from numba import njit
 import sympy as sp
 import numpy as np
+from scipy.signal import filtfilt, butter
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj
+from .abstract_term import AbstractTerm, calc_flux_with_numba, calc_flux_with_numba_traj, calc_flux_with_numba_traj_filter
 
 class FluxDvdvdv(AbstractTerm):
     def __init__(self):
@@ -45,6 +46,19 @@ class FluxDvdvdv(AbstractTerm):
     
     def calc_incr_traj(self, n_points, n_trajectories, vx, vy, vz, **kwarg):
         return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, n_points, n_trajectories, vx, vy, vz)
+
+    def calc_filter(self, n_points, n_trajectories, fs, vx, vy, vz, **kwarg):
+        acc = np.zeros((3, n_trajectories, n_points))
+        order = 0
+        for dl in range(n_points):
+            if dl // 25 > order:
+                order = dl // 25
+                b, a = butter(order, 2*np.pi / (dl * 1/fs), btype='low', fs=fs)
+                vx = filtfilt(b, a, vx, axis=-1)
+                vy = filtfilt(b, a, vy, axis=-1)
+                vz = filtfilt(b, a, vz, axis=-1)
+            acc[:, :, dl] = calc_flux_with_numba_traj_filter(calc_in_point_with_sympy_traj, dl, n_points, n_trajectories, vx, vy, vz)
+        return acc
 
     def calc_fourier(self, vx, vy, vz, traj=False, **kwarg) -> List:
         return calc_with_fourier(vx, vy, vz, traj=traj)

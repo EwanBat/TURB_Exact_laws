@@ -149,9 +149,9 @@ def gradient_4satellite(dic_quant, quantity_name, traj_param):
     alpha2 = dic_quant['sat_2'][quantity_name] - dic_quant['sat_0'][quantity_name]
     alpha3 = dic_quant['sat_3'][quantity_name] - dic_quant['sat_0'][quantity_name]
 
-    gradalpha = alpha1[np.newaxis, :, :] * np.cross(dR2[:, np.newaxis, np.newaxis], dR3[:, np.newaxis, np.newaxis], axis=0) + \
-                alpha2[np.newaxis, :, :] * np.cross(dR3[:, np.newaxis, np.newaxis], dR1[:, np.newaxis, np.newaxis], axis=0) + \
-                alpha3[np.newaxis, :, :] * np.cross(dR1[:, np.newaxis, np.newaxis], dR2[:, np.newaxis, np.newaxis], axis=0)
+    gradalpha = alpha1[np.newaxis, :, :] * np.cross(dR2, dR3)[:, np.newaxis, np.newaxis] + \
+                alpha2[np.newaxis, :, :] * np.cross(dR3, dR1)[:, np.newaxis, np.newaxis] + \
+                alpha3[np.newaxis, :, :] * np.cross(dR1, dR2)[:, np.newaxis, np.newaxis]
 
     reciprocal_volume = 1 / np.dot(dR1, np.cross(dR2, dR3))
     return gradalpha * reciprocal_volume

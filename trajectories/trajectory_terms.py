@@ -7,10 +7,9 @@ Encapsulated in TrajectoryTermsComputer class for better parameter management.
 """
 
 import numpy as np
-from numba import njit, prange, get_num_threads, set_num_threads
+from numba import njit, prange, set_num_threads
 import logging
 import h5py
-import statsmodels.api as sm
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
 
@@ -102,7 +101,7 @@ class TrajectoryTermsComputer:
         
     # ========== INITIALIZATION ==========
     
-    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None, max_workers: int = np.nan):
+    def __init__(self, verbose: bool = False, grid_param: dict = None, physical_param: dict = None, traj_param: dict = None, max_workers: int = np.nan):
         """
         Initialize the trajectory terms computer.
         
@@ -110,6 +109,8 @@ class TrajectoryTermsComputer:
         -----------
         verbose : bool
             Enable detailed logger
+        grid_param : dict, optional
+            Grid parameters
         physical_param : dict, optional
             Physical parameters
         traj_param : dict, optional
@@ -118,6 +119,7 @@ class TrajectoryTermsComputer:
             Maximum number of threads for ThreadPoolExecutor (default: 2)
         """
         self.verbose = verbose
+        self.grid_param = grid_param or {}
         self.physical_param = physical_param or {}
         self.traj_param = traj_param or {}
         self.max_workers = max_workers
@@ -201,6 +203,13 @@ class TrajectoryTermsComputer:
         result = {sat_name: {} for sat_name in self._sat_names}
         
         if method == "incremental":
+            if self.traj_param['trajectory_method'] == "linear_x":
+                fs = 1/self.grid_param['c'][0]
+            elif self.traj_param['trajectory_method'] == "linear_y":
+                fs = 1/self.grid_param['c'][1]
+            elif self.traj_param['trajectory_method'] == "linear_z":
+                fs = 1/self.grid_param['c'][2]
+
             if self.nbsatellite == 1:
                 try:
                     merged_quantities = {}  # Initialize an array to hold merged quantities for each trajectory and point
@@ -235,7 +244,7 @@ class TrajectoryTermsComputer:
                             term_obj = TERMS[term_name]
                             if term_name in self.FLUX_TERMS:
                                 result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
-                                
+
                             elif term_name in self.SOURCE_TERMS and sat2 == 'sat_0':  # Compute source terms only for reference satellite
                                 result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
 
@@ -380,7 +389,7 @@ class TrajectoryTermsComputer:
     
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = np.nan):
+def compute_all_terms_for_laws(dic_quantities: dict = None, grid_param: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = np.nan):
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
@@ -389,5 +398,6 @@ def compute_all_terms_for_laws(dic_quantities: dict = None, traj_param: dict = N
     computer = TrajectoryTermsComputer(verbose=verbose, 
                                       physical_param=physical_param, 
                                       traj_param=traj_param,
+                                      grid_param=grid_param,
                                       max_workers=max_workers)
     return computer.compute_all_terms_for_laws(dic_quantities, laws, method, filename)

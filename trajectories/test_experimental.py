@@ -1,9 +1,3 @@
-# %% Configure numba environment BEFORE importing modules
-import os
-os.environ['NUMBA_NUM_THREADS'] = '2'  # Limit numba parallelization across all modules
-os.environ['OMP_NUM_THREADS'] = '2'     # Also limit OpenMP threads for safety
-os.environ['THREADPOOL_MAX_WORKERS'] = '2'  # Limit ThreadPoolExecutor workers
-
 # %% import libraries
 import numpy as np
 import logging
@@ -32,18 +26,18 @@ config_file = "trajectories/input_experimental.ini"
 logging.info("\n" + "="*70)
 logging.info("PREPROCESSING TRAJECTORY")
 
-x = [np.random.rand(1000) for _ in range(4)]  # Replace with actual data loading
-y = [np.random.rand(1000) for _ in range(4)]
-z = [np.random.rand(1000) for _ in range(4)]
-bx = [np.random.rand(1000) for _ in range(4)]
-by = [np.random.rand(1000) for _ in range(4)]
-bz = [np.random.rand(1000) for _ in range(4)]
-vx = [np.random.rand(1000) for _ in range(4)]
-vy = [np.random.rand(1000) for _ in range(4)]
-vz = [np.random.rand(1000) for _ in range(4)]
-rho = [np.random.rand(1000) for _ in range(4)]
-ppar = [np.random.rand(1000) for _ in range(4)]
-pperp = [np.random.rand(1000) for _ in range(4)]
+x = [np.random.rand(10000) for _ in range(4)]  # Replace with actual data loading
+y = [np.random.rand(10000) for _ in range(4)]
+z = [np.random.rand(10000) for _ in range(4)]
+bx = [np.random.rand(10000) for _ in range(4)]
+by = [np.random.rand(10000) for _ in range(4)]
+bz = [np.random.rand(10000) for _ in range(4)]
+vx = [np.random.rand(10000) for _ in range(4)]
+vy = [np.random.rand(10000) for _ in range(4)]
+vz = [np.random.rand(10000) for _ in range(4)]
+rho = [np.random.rand(10000) for _ in range(4)]
+ppar = [np.random.rand(10000) for _ in range(4)]
+pperp = [np.random.rand(10000) for _ in range(4)]
 
 config = preprocess_experimental_trajectory_from_ini(
     ini_file=config_file,

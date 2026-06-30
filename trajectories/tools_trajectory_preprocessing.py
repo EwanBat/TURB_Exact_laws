@@ -544,9 +544,9 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     n_points = len(t)
 
     if nbsatellite == 4: # Define satellite offsets for 4-satellite configuration
-        dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c']  # Convert gap from indices to physical units
-        dR2 = np.array([0, gap_satellite, 0]) * grid_param['c']
-        dR3 = np.array([0, 0, gap_satellite]) * grid_param['c']
+        dR1 = np.array([2*gap_satellite, 2*gap_satellite, 0]) * grid_param['c']  # Convert gap from indices to physical units
+        dR2 = np.array([2*gap_satellite, 0, 1*gap_satellite]) * grid_param['c']
+        dR3 = np.array([0, 2*gap_satellite, 1*gap_satellite]) * grid_param['c']
         traj_param['dR1'] = dR1
         traj_param['dR2'] = dR2
         traj_param['dR3'] = dR3
@@ -589,4 +589,6 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         logging.info(f"    Data shape: ({n_trajectories}, {n_points})")
         logging.info(f"    Satellites: {', '.join(dic_datas_combined.keys())}")
     
-    return dic_datas_combined, trajectories_list
+    del trajectories_list, tangents_list, ltraj_list  # Free memory
+
+    return dic_datas_combined
