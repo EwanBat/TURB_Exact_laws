@@ -101,7 +101,7 @@ class TrajectoryTermsComputer:
         
     # ========== INITIALIZATION ==========
     
-    def __init__(self, verbose: bool = False, grid_param: dict = None, physical_param: dict = None, traj_param: dict = None, max_workers: int = np.nan):
+    def __init__(self, verbose: bool = False, grid_param: dict = None, physical_param: dict = None, traj_param: dict = None, run_params: dict = None):
         """
         Initialize the trajectory terms computer.
         
@@ -122,7 +122,7 @@ class TrajectoryTermsComputer:
         self.grid_param = grid_param or {}
         self.physical_param = physical_param or {}
         self.traj_param = traj_param or {}
-        self.max_workers = max_workers
+        self.run_params = run_params or {}
         self.nbsatellite = self.traj_param.get('nbsatellite', 1)
     
         self._sat_names = [f'sat_{i}' for i in range(self.nbsatellite)]
@@ -164,7 +164,7 @@ class TrajectoryTermsComputer:
         
         return terms
 
-    def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, method: str = None, filename: str = "terms_trajectory.h5"):
+    def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, filename: str = "terms_trajectory.h5"):
         """
         Compute all terms required for the given laws.
         
@@ -202,7 +202,7 @@ class TrajectoryTermsComputer:
         # Initialize result with satellite names
         result = {sat_name: {} for sat_name in self._sat_names}
         
-        if method == "incremental":
+        if self.run_params.get('method') == "incremental":
             if self.traj_param['trajectory_method'] == "linear_x":
                 fs = 1/self.grid_param['c'][0]
             elif self.traj_param['trajectory_method'] == "linear_y":
@@ -221,11 +221,14 @@ class TrajectoryTermsComputer:
                     
                     for term_name in required_terms:
                         term_obj = TERMS[term_name]
-                        result['sat_0'][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                        if self.run_params.get('filter_enabled', False):
+                            result['sat_0'][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                        else:
+                            result['sat_0'][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
 
                     logger.info(f"  [OK] Terms computed for satellite sat_0")
                 except Exception as e:
-                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
                     raise
             
             elif self.nbsatellite == 4:
@@ -239,21 +242,27 @@ class TrajectoryTermsComputer:
                                     dic_quantities[sat1][quantity],
                                     dic_quantities[sat2][quantity]
                                     ), axis=1)}) # Merge along points axis (axis=1) to create arrays of shape (n_trajectories, 2*n_points)
-                        set_num_threads(self.max_workers)  # Set numba to use the specified number of threads
+                        set_num_threads(self.run_params.get('max_workers', 1))  # Set numba to use the specified number of threads
                         for term_name in required_terms:
                             term_obj = TERMS[term_name]
                             if term_name in self.FLUX_TERMS:
-                                result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                                if self.run_params.get('filter_enabled', False):
+                                    result[sat2][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                                else:
+                                    result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
 
                             elif term_name in self.SOURCE_TERMS and sat2 == 'sat_0':  # Compute source terms only for reference satellite
-                                result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                                if self.run_params.get('filter_enabled', False):
+                                    result[sat2][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                                else:
+                                    result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
 
                         logger.info(f"  [OK] Terms computed for satellite {sat2}")
                 except Exception as e:
-                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
                     raise
 
-        elif method == "fourier":
+        elif self.run_params.get('method') == "fourier":
             if self.nbsatellite == 1:
                 try:
                     for term_name in required_terms:
@@ -263,7 +272,7 @@ class TrajectoryTermsComputer:
                             result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
                     logger.info(f"  [OK] Terms computed for satellite sat_0")
                 except Exception as e:
-                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
                     raise
         
             elif self.nbsatellite == 4:
@@ -278,7 +287,7 @@ class TrajectoryTermsComputer:
                             result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
                     logger.info(f"  [OK] Terms computed for satellite sat_0")
                 except Exception as e:
-                    logger.error(f"Method {method}, nbsatellite={self.nbsatellite} : {e}")
+                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
                     raise
         
         if self.verbose:
@@ -389,7 +398,7 @@ class TrajectoryTermsComputer:
     
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_all_terms_for_laws(dic_quantities: dict = None, grid_param: dict = None, traj_param: dict = None, physical_param: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, method: str = None, verbose: bool = False, max_workers: int = np.nan):
+def compute_all_terms_for_laws(dic_quantities: dict = None, grid_param: dict = None, traj_param: dict = None, physical_param: dict = None, run_params: dict = None, filename:str = "terms_trajectory.h5", laws: list = None, verbose: bool = False):
     """
     Backward compatibility wrapper for compute_all_terms_for_laws.
     
@@ -399,5 +408,5 @@ def compute_all_terms_for_laws(dic_quantities: dict = None, grid_param: dict = N
                                       physical_param=physical_param, 
                                       traj_param=traj_param,
                                       grid_param=grid_param,
-                                      max_workers=max_workers)
-    return computer.compute_all_terms_for_laws(dic_quantities, laws, method, filename)
+                                      run_params=run_params)
+    return computer.compute_all_terms_for_laws(dic_quantities, laws, filename)

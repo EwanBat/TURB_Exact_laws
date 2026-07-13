@@ -178,26 +178,25 @@ class SourceDpan(AbstractTerm):
                     dxvy, dyvy, dzvy,
                     dxvz, dyvz, dzvz, **kwarg):
         acc = np.zeros((n_trajectories, n_points))
-        order = 0
+        order = 4
         for dl in range(n_points):
-            if dl // 25 > order:
-                order = dl // 25
-                b, a = butter(order, 2*np.pi / (dl * 1/fs), btype='low', fs=fs)
-                Ibx = filtfilt(b, a, Ibx, axis=-1)
-                Iby = filtfilt(b, a, Iby, axis=-1)
-                Ibz = filtfilt(b, a, Ibz, axis=-1)
-                Ipperp = filtfilt(b, a, Ipperp, axis=-1)
-                Ippar = filtfilt(b, a, Ippar, axis=-1)
-                Ipm = filtfilt(b, a, Ipm, axis=-1)
-                dxvx = filtfilt(b, a, dxvx, axis=-1)
-                dyvx = filtfilt(b, a, dyvx, axis=-1)
-                dzvx = filtfilt(b, a, dzvx, axis=-1)
-                dxvy = filtfilt(b, a, dxvy, axis=-1)
-                dyvy = filtfilt(b, a, dyvy, axis=-1)
-                dzvy = filtfilt(b, a, dzvy, axis=-1)
-                dxvz = filtfilt(b, a, dxvz, axis=-1)
-                dyvz = filtfilt(b, a, dyvz, axis=-1)
-                dzvz = filtfilt(b, a, dzvz, axis=-1)
+            wn = 2*np.pi / (dl * 1/fs)
+            b, a = butter(order, wn, btype='low', fs=fs)
+            Ibx = filtfilt(b, a, Ibx, axis=-1)
+            Iby = filtfilt(b, a, Iby, axis=-1)
+            Ibz = filtfilt(b, a, Ibz, axis=-1)
+            Ipperp = filtfilt(b, a, Ipperp, axis=-1)
+            Ippar = filtfilt(b, a, Ippar, axis=-1)
+            Ipm = filtfilt(b, a, Ipm, axis=-1)
+            dxvx = filtfilt(b, a, dxvx, axis=-1)
+            dyvx = filtfilt(b, a, dyvx, axis=-1)
+            dzvx = filtfilt(b, a, dzvx, axis=-1)
+            dxvy = filtfilt(b, a, dxvy, axis=-1)
+            dyvy = filtfilt(b, a, dyvy, axis=-1)
+            dzvy = filtfilt(b, a, dzvy, axis=-1)
+            dxvz = filtfilt(b, a, dxvz, axis=-1)
+            dyvz = filtfilt(b, a, dyvz, axis=-1)
+            dzvz = filtfilt(b, a, dzvz, axis=-1)
             acc[:,dl] = calc_source_with_numba_traj_filter(calc_in_point_with_sympy_traj, dl, n_points, n_trajectories, Ipperp, Ippar, Ipm,
                                                               Ibx, Iby, Ibz,
                                                                 dxvx, dyvx, dzvx,
@@ -320,47 +319,55 @@ def calc_in_point_with_sympy_traj_split(t, tp,
     return (fxx(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
-        + fxx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            + fxx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)),(fxy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fxy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fxy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
+            + fxy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)),(fxz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fxz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fxz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fxz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fyx(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fyx(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fyx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fyx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fyy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)),  \
+        (fyy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fyy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fyy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fyz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fyz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fyz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fyz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fzx(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fzx(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fzx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fzx(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fzy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fzy(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fzy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fzy(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), (fzz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP)), \
+        (fzz(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) + 
-        fzz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP) 
+            + fzz(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP))
 

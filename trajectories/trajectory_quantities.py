@@ -188,7 +188,6 @@ class TrajectoryQuantitiesComputer:
             logger.info(f"  Quantities to compute: {len(available_quantities)}")
             logger.info(f"  {available_quantities}")
                 
-        # self.quantities_to_h5(result, filename)
         return self._compute_all_quantities(dic_datas, available_quantities, filename)
     
     def list_computable_quantities(self, dic_quant: dict, laws=None, terms=None, 
@@ -256,6 +255,8 @@ class TrajectoryQuantitiesComputer:
                         else:
                             dic_quantities[sat_name][quantity_name] = result
                 
+
+
                 except Exception as e:
                     if self.verbose:
                         logger.error(f"Failed to compute {quantity_name}: {str(e)}")

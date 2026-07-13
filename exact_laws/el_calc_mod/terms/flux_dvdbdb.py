@@ -57,17 +57,16 @@ class FluxDvdbdb(AbstractTerm):
 
     def calc_filter(self, n_points, n_trajectories, fs, vx, vy, vz, Ibx, Iby, Ibz, **kwarg):
         acc = np.zeros((3, n_trajectories, n_points))
-        order = 0
+        order = 4
         for dl in range(n_points):
-            if dl // 25 > order:
-                order = dl // 25
-                b, a = butter(order, 2*np.pi / (dl * 1/fs), btype='low', fs=fs)
-                vx = filtfilt(b, a, vx, axis=-1)
-                vy = filtfilt(b, a, vy, axis=-1)
-                vz = filtfilt(b, a, vz, axis=-1)
-                Ibx = filtfilt(b, a, Ibx, axis=-1)
-                Iby = filtfilt(b, a, Iby, axis=-1)
-                Ibz = filtfilt(b, a, Ibz, axis=-1)
+            wn = 2*np.pi / (dl * 1/fs)
+            b, a = butter(order, wn, btype='low', fs=fs)
+            vx = filtfilt(b, a, vx, axis=-1)
+            vy = filtfilt(b, a, vy, axis=-1)
+            vz = filtfilt(b, a, vz, axis=-1)
+            Ibx = filtfilt(b, a, Ibx, axis=-1)
+            Iby = filtfilt(b, a, Iby, axis=-1)
+            Ibz = filtfilt(b, a, Ibz, axis=-1)
             acc[:, :, dl] = calc_flux_with_numba_traj_filter(calc_in_point_with_sympy_traj, dl, n_points, n_trajectories, vx, vy, vz, Ibx, Iby, Ibz)
         return acc
 

@@ -19,8 +19,11 @@ from exact_laws.preprocessing.process_on_oca_files import (
 
 from trajectories.tools_trajectory_preprocessing import (
     trajectory_linear_x,
+    trajectory_linear_minus_x,
     trajectory_linear_y,
+    trajectory_linear_minus_y,
     trajectory_linear_z,
+    trajectory_linear_minus_z,
     trajectory_circular_xy,
     trajectory_helical,
     trajectory_diagonal,
@@ -198,7 +201,16 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
         if section not in config:
             raise ValueError(f"Required section missing in INI file: [{section}]")
     
-    # Load OUTPUT_DATA section
+    ################################## Load INPUT_DATA section
+    try:
+        input_folder = config["INPUT_DATA"].get("path", input_folder)
+        cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
+        sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
+    except Exception as e:
+        logging.error(f"Error reading INPUT_DATA: {e}")
+        raise
+    
+    ################################## Load OUTPUT_DATA section
     laws = eval(config["OUTPUT_DATA"].get("laws", "[]"))
     terms = eval(config["OUTPUT_DATA"].get("terms", "[]"))
     quantities = eval(config["OUTPUT_DATA"].get("quantities", "[]"))
@@ -213,54 +225,54 @@ def load_config_from_ini(config_file: str, input_folder: str = ""):
             except:
                 physical_param[key] = config["PHYSICAL_PARAMS"][key]
     
-    # Load trajectory_kwargs as list of dictionaries
-    trajectory_kwargs_str = config["RUN_PARAMS"].get("trajectory_kwargs", "[{}]")
-    
-    # Check if 'all' is specified
-    if trajectory_kwargs_str.strip().lower() == "'all'" or trajectory_kwargs_str.strip().lower() == '"all"':
-        # Will be generated after loading grid parameters
-        trajectory_kwargs_list = 'all'
-    else:
-        trajectory_kwargs_list = eval(trajectory_kwargs_str)
         
-        # Ensure it's a list of dicts
-        if isinstance(trajectory_kwargs_list, dict):
-            trajectory_kwargs_list = [trajectory_kwargs_list]
-        elif not isinstance(trajectory_kwargs_list, list):
-            trajectory_kwargs_list = [{}]
-    
-    # Load RUN_PARAMS section
-    try:
-        method = config["RUN_PARAMS"].get("method", None)
-        nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", None)
-        gap_satellite = config["RUN_PARAMS"].getfloat("gap_satellite", None)
-        trajectory_method = config["RUN_PARAMS"].get("trajectory_method", None)
-        Ninterp = config["RUN_PARAMS"].getint("Ninterp", None)
-        step_traj = config["RUN_PARAMS"].getint("step_traj", None)
-    except Exception as e:
-        logging.error(f"Error reading RUN_PARAMS: {e}")
-        raise
-    
-    # Load INPUT_DATA section
-    try:
-        input_folder = config["INPUT_DATA"].get("path", input_folder)
-        cycle = config["INPUT_DATA"].get("cycle", "cycle_0")
-        sim_type = config["INPUT_DATA"].get("sim_type", "OCA_CGL5").split("_")[-1]
-        max_workers = config["INPUT_DATA"].getint("max_workers", np.nan)
-    except Exception as e:
-        logging.error(f"Error reading INPUT_DATA: {e}")
-        raise
-    
-    # Load PHYSICAL_PARAMS di value
+    ################################## Load PHYSICAL_PARAMS di value
     try:
         di = config["PHYSICAL_PARAMS"].getfloat("di", 1.0)
     except Exception as e:
         logging.error(f"Error reading di from PHYSICAL_PARAMS: {e}")
         di = 1.0
+
+    ################################## Load RUN_PARAMS section
+    try:
+        method = config["RUN_PARAMS"].get("method", None)
+        Ninterp = config["RUN_PARAMS"].getint("Ninterp", None)
+        max_workers = config["RUN_PARAMS"].getint("max_workers", np.nan)
+        filter_enabled = config["RUN_PARAMS"].getboolean("filter", False)
+
+    except Exception as e:
+        logging.error(f"Error reading RUN_PARAMS: {e}")
+        raise
     
-    return (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
-            nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
-            trajectory_method, Ninterp, step_traj, max_workers)
+    ################################## Load TRAJECTORY_PARAMS section
+    try:    
+        nbsatellite = config["TRAJECTORY_PARAMS"].getint("nbsatellite", None)
+        gap_satellite = config["TRAJECTORY_PARAMS"].getfloat("gap_satellite", None)
+        trajectory_method = config["TRAJECTORY_PARAMS"].get("trajectory_method", None)
+        step_traj = config["TRAJECTORY_PARAMS"].getint("step_traj", None)
+        # Load trajectory_kwargs as list of dictionaries
+        trajectory_kwargs_str = config["TRAJECTORY_PARAMS"].get("trajectory_kwargs", "[{}]")
+        
+        # Check if 'all' is specified
+        if trajectory_kwargs_str.strip().lower() == "'all'" or trajectory_kwargs_str.strip().lower() == '"all"':
+            # Will be generated after loading grid parameters
+            trajectory_kwargs_list = 'all'
+        else:
+            trajectory_kwargs_list = eval(trajectory_kwargs_str)
+            
+            # Ensure it's a list of dicts
+            if isinstance(trajectory_kwargs_list, dict):
+                trajectory_kwargs_list = [trajectory_kwargs_list]
+            elif not isinstance(trajectory_kwargs_list, list):
+                trajectory_kwargs_list = [{}]
+    except Exception as e:
+        logging.error(f"Error reading TRAJECTORY_PARAMS: {e}")
+        raise
+
+
+    return (input_folder, cycle, sim_type, max_workers, laws, terms, quantities, name_output,
+            di, physical_param, filter_enabled, method, Ninterp, 
+            nbsatellite, gap_satellite, trajectory_method, step_traj, trajectory_kwargs_list)
 
 def preprocess_trajectory_from_ini(ini_file: str,
                                    input_folder: str = "",
@@ -299,26 +311,30 @@ def preprocess_trajectory_from_ini(ini_file: str,
     
     # Load all configuration from INI file
     try:
-        (laws, terms, quantities, name_output, physical_param, method, trajectory_kwargs_list,
-         nbsatellite, gap_satellite, input_folder, cycle, sim_type, di,
-         trajectory_method, Ninterp, step_traj, max_workers) = load_config_from_ini(ini_file, input_folder)
+        (input_folder, cycle, sim_type, max_workers, laws, terms, quantities, name_output,
+        di, physical_param, filter_enabled, method, Ninterp, 
+        nbsatellite, gap_satellite, trajectory_method, step_traj, trajectory_kwargs_list) = load_config_from_ini(ini_file, input_folder)
     except Exception as e:
         logging.error(f"Error loading configuration: {e}")
         raise
     
     if verbose:
-        logging.info(f"  Laws:              {laws}")
-        logging.info(f"  Method:            {method}")
-        logging.info(f"  Physical params:   {physical_param}")
-        logging.info(f"  Nbsatellite:       {nbsatellite}")
-        logging.info(f"  Gap satellite:     {gap_satellite}")
         logging.info(f"  Input folder:      {input_folder}")
         logging.info(f"  Cycle:             {cycle}")
         logging.info(f"  Sim type:          {sim_type}")
+        logging.info(f"  N threads:         {max_workers}")
+
+        logging.info(f"  Laws:              {laws}")
+
+        logging.info(f"  Physical params:   {physical_param}")
+        logging.info(f"  Method:            {method}")
+        logging.info(f"  N interp points:   {Ninterp}")
+        logging.info(f"  Filter enabled:    {filter_enabled}")
+
+        logging.info(f"  Nbsatellite:       {nbsatellite}")
+        logging.info(f"  Gap satellite:     {gap_satellite}")
         logging.info(f"  Trajectory method: {trajectory_method}")
         logging.info(f"  N trajectory sets: {len(trajectory_kwargs_list)}")
-        logging.info(f"  N interp points:   {Ninterp}")
-        logging.info(f"  N threads:         {max_workers}")
     
     # Load OCA data (3D)
     try:
@@ -336,21 +352,21 @@ def preprocess_trajectory_from_ini(ini_file: str,
 
     # Generate all trajectory_kwargs if 'all' was specified
     if trajectory_kwargs_list == 'all':
-        if trajectory_method == "linear_x":
+        if trajectory_method == "linear_x" or trajectory_method == "linear_minus_x":
             trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_x(grid_param['N'], step_traj)
             name_output += f"_all_step{step_traj}"
             traj_param['step_traj'] = step_traj
             if verbose:
                 logging.info(f"  Generating ALL trajectory positions for linear_x...")
                 logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
-        elif trajectory_method == "linear_y":
+        elif trajectory_method == "linear_y" or trajectory_method == "linear_minus_y":
             trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_y(grid_param['N'], step_traj)
             name_output += f"_all_step{step_traj}"
             traj_param['step_traj'] = step_traj
             if verbose:
                 logging.info(f"  Generating ALL trajectory positions for linear_y...")
                 logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
-        elif trajectory_method == "linear_z":
+        elif trajectory_method == "linear_z" or trajectory_method == "linear_minus_z":
             trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_z(grid_param['N'], step_traj)
             name_output += f"_all_step{step_traj}"
             traj_param['step_traj'] = step_traj
@@ -376,6 +392,12 @@ def preprocess_trajectory_from_ini(ini_file: str,
         trajectory_func = trajectory_helical
     elif trajectory_method == "diagonal":
         trajectory_func = trajectory_diagonal
+    elif trajectory_method == "linear_minus_y":
+        trajectory_func = trajectory_linear_minus_y
+    elif trajectory_method == "linear_minus_x":
+        trajectory_func = trajectory_linear_minus_x
+    elif trajectory_method == "linear_minus_z":
+        trajectory_func = trajectory_linear_minus_z
     else:
         raise ValueError(f"Unsupported trajectory method: {trajectory_method}")
     traj_param['trajectory_method'] = trajectory_method
@@ -419,7 +441,14 @@ def preprocess_trajectory_from_ini(ini_file: str,
                   for traj_idx in range(traj_param['n_trajectories'])]
             for sat in dic_datas.keys()
         }
-        
+    
+    run_params = {
+        "method": method,
+        "Ninterp": Ninterp,
+        "max_workers": max_workers,
+        "filter_enabled": filter_enabled
+    }
+
     if verbose:
         logging.info(f"\n  [OK] Extraction complete: {len(dic_datas)} field quantities")
         logging.info(f"    Total trajectories processed: {len(traj_param['trajectories_list'])}")
@@ -429,12 +458,11 @@ def preprocess_trajectory_from_ini(ini_file: str,
             'terms': terms,
             'quantities': quantities,
             'dic_datas': dic_datas,
-            'method': method,
             'grid_param': grid_param,
             'traj_param': traj_param,
             'physical_param': physical_param,
+            'run_params': run_params,
             'trajectory_name': trajectory_func.__name__.split('_', 1)[-1],  
             'name_output': name_output,
-            'max_workers': max_workers
         }
 

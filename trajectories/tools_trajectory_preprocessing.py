@@ -38,6 +38,37 @@ def trajectory_linear_x(t: np.ndarray, y_pos: int, z_pos: int,
     z = np.clip(z, 0, N[2]-1).astype(int)
     return np.array([x, y, z]).T
 
+def trajectory_linear_minus_x(t: np.ndarray, y_pos: int, z_pos: int,
+                             N: np.ndarray, Ninterp: int) -> np.ndarray:
+    """
+    Linear trajectory along the -x axis (indices).
+
+    Parameters:
+    -----------
+    t : np.ndarray
+        Trajectory parameter (0 to N[0]-1)
+    y_pos : int
+        Fixed position on y (index)
+    z_pos : int
+        Fixed position on z (index)
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+
+    Returns:
+    -------
+    np.ndarray
+        Trajectory points (n_points, 3) with [x, y, z] indices
+    """
+    x = N[0] - 1 - t  # Reverse direction along x
+    y = np.full_like(t, y_pos, dtype=int)
+    z = np.full_like(t, z_pos, dtype=int)
+
+    # Clip to grid limits
+    x = np.clip(x, 0, N[0]-1).astype(int)
+    y = np.clip(y, 0, N[1]-1).astype(int)
+    z = np.clip(z, 0, N[2]-1).astype(int)
+    return np.array([x, y, z]).T
+
 def trajectory_linear_y(t: np.ndarray, x_pos: int, z_pos: int,
                         N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
@@ -61,6 +92,37 @@ def trajectory_linear_y(t: np.ndarray, x_pos: int, z_pos: int,
     """
     x = np.full_like(t, x_pos, dtype=int)
     y = t
+    z = np.full_like(t, z_pos, dtype=int)
+    
+    # Clip to grid limits
+    x = np.clip(x, 0, N[0]-1).astype(int)
+    y = np.clip(y, 0, N[1]-1).astype(int)
+    z = np.clip(z, 0, N[2]-1).astype(int)
+    return np.array([x, y, z]).T
+
+def trajectory_linear_minus_y(t: np.ndarray, x_pos: int, z_pos: int,
+                        N: np.ndarray, Ninterp: int) -> np.ndarray:
+    """
+    Linear trajectory along the -y axis (indices).
+    
+    Parameters:
+    -----------
+    t : np.ndarray
+        Trajectory parameter (0 to N[1]-1)
+    x_pos : int
+        Fixed position on x (index)
+    z_pos : int
+        Fixed position on z (index)
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+    
+    Returns:
+    -------
+    np.ndarray
+        Trajectory points (n_points, 3) with [x, y, z] indices
+    """
+    x = np.full_like(t, x_pos, dtype=int)
+    y = N[1] - 1 - t  # Reverse direction along y
     z = np.full_like(t, z_pos, dtype=int)
     
     # Clip to grid limits
@@ -93,6 +155,37 @@ def trajectory_linear_z(t: np.ndarray, x_pos: int, y_pos: int,
     x = np.full_like(t, x_pos, dtype=int)
     y = np.full_like(t, y_pos, dtype=int)
     z = t
+
+    # Clip to grid limits
+    x = np.clip(x, 0, N[0]-1).astype(int)
+    y = np.clip(y, 0, N[1]-1).astype(int)
+    z = np.clip(z, 0, N[2]-1).astype(int)
+    return np.array([x, y, z]).T
+
+def trajectory_linear_minus_z(t: np.ndarray, x_pos: int, y_pos: int,
+                        N: np.ndarray, Ninterp: int) -> np.ndarray:
+    """
+    Linear trajectory along the -z axis (indices).
+
+    Parameters:
+    -----------
+    t : np.ndarray
+        Trajectory parameter (0 to N[2]-1)
+    x_pos : int
+        Fixed position on x (index)
+    y_pos : int
+        Fixed position on y (index)
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+
+    Returns:
+    -------
+    np.ndarray
+        Trajectory points (n_points, 3) with [x, y, z] indices
+    """
+    x = np.full_like(t, x_pos, dtype=int)
+    y = np.full_like(t, y_pos, dtype=int)
+    z = N[2] - 1 - t  # Reverse direction along z
 
     # Clip to grid limits
     x = np.clip(x, 0, N[0]-1).astype(int)
@@ -533,20 +626,23 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     ltraj_list = []
     
     # Generate trajectory with interpolation
-    if traj_param['trajectory_method'] == 'linear_x':
+    if traj_param['trajectory_method'] == 'linear_x' or traj_param['trajectory_method'] == 'linear_minus_x':
         t = np.arange(Ninterp * N[0]) / Ninterp
-    elif traj_param['trajectory_method'] == 'linear_y':
+    elif traj_param['trajectory_method'] == 'linear_y' or traj_param['trajectory_method'] == 'linear_minus_y':
         t = np.arange(Ninterp * N[1]) / Ninterp
-    elif traj_param['trajectory_method'] == 'linear_z':
+    elif traj_param['trajectory_method'] == 'linear_z' or traj_param['trajectory_method'] == 'linear_minus_z':
         t = np.arange(Ninterp * N[2]) / Ninterp
     
     # Get dimensions from first trajectory
     n_points = len(t)
 
     if nbsatellite == 4: # Define satellite offsets for 4-satellite configuration
-        dR1 = np.array([2*gap_satellite, 2*gap_satellite, 0]) * grid_param['c']  # Convert gap from indices to physical units
-        dR2 = np.array([2*gap_satellite, 0, 1*gap_satellite]) * grid_param['c']
-        dR3 = np.array([0, 2*gap_satellite, 1*gap_satellite]) * grid_param['c']
+        # dR1 = np.array([2*gap_satellite, 2*gap_satellite, 0]) * grid_param['c']  # Convert gap from indices to physical units
+        # dR2 = np.array([2*gap_satellite, 0, 1*gap_satellite]) * grid_param['c']
+        # dR3 = np.array([0, 2*gap_satellite, 1*gap_satellite]) * grid_param['c']
+        dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c']  # Convert gap from indices to physical units
+        dR2 = np.array([0, gap_satellite, 0]) * grid_param['c']
+        dR3 = np.array([0, 0, gap_satellite]) * grid_param['c']
         traj_param['dR1'] = dR1
         traj_param['dR2'] = dR2
         traj_param['dR3'] = dR3
