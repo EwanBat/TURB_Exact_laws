@@ -180,7 +180,10 @@ class SourceDpan(AbstractTerm):
         acc = np.zeros((n_trajectories, n_points))
         order = 4
         for dl in range(n_points):
-            wn = 2*np.pi / (dl * 1/fs)
+            if dl > 2:
+                wn = fs / dl
+            else:
+                wn = fs / 3 
             b, a = butter(order, wn, btype='low', fs=fs)
             Ibx = filtfilt(b, a, Ibx, axis=-1)
             Iby = filtfilt(b, a, Iby, axis=-1)
@@ -252,7 +255,7 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
     return (f(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
-           + f(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            + f(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
             dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
             dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP))
 
@@ -279,11 +282,11 @@ def calc_in_point_with_sympy_traj(t, tp,
     dxvzNP, dyvzNP, dzvzNP = dxvz[:,t], dyvz[:,t], dzvz[:,t]
 
     return (f(IpperpP, IpparP, IpmP, IbxP, IbyP, IbzP,
-        dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
-        dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
-        + f(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
-        dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
-        dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP))
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP)
+            + f(IpperpNP, IpparNP, IpmNP, IbxNP, IbyNP, IbzNP,
+            dxvxNP, dyvxNP, dzvxNP, dxvyNP, dyvyNP, dzvyNP, dxvzNP, dyvzNP, dzvzNP,
+            dxvxP, dyvxP, dzvxP, dxvyP, dyvyP, dzvyP, dxvzP, dyvzP, dzvzP))
 
 @njit
 def calc_in_point_with_sympy_traj_split(t, tp,

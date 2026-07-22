@@ -59,7 +59,10 @@ class FluxDvdbdb(AbstractTerm):
         acc = np.zeros((3, n_trajectories, n_points))
         order = 4
         for dl in range(n_points):
-            wn = 2*np.pi / (dl * 1/fs)
+            if dl > 2:
+                wn = fs / dl
+            else:
+                wn = fs / 3
             b, a = butter(order, wn, btype='low', fs=fs)
             vx = filtfilt(b, a, vx, axis=-1)
             vy = filtfilt(b, a, vy, axis=-1)

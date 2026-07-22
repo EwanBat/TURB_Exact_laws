@@ -193,112 +193,29 @@ def trajectory_linear_minus_z(t: np.ndarray, x_pos: int, y_pos: int,
     z = np.clip(z, 0, N[2]-1).astype(int)
     return np.array([x, y, z]).T
 
-def trajectory_circular_xy(t: np.ndarray, radius: int, center_y: int, center_z: int,
-                           N: np.ndarray, Ninterp: int) -> np.ndarray:
+def trajectory_linear_xy(t: np.ndarray, z_pos: int, N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
-    Circular trajectory in the xy plane around a center (indices).
+    Linear trajectory along the diagonal in the xy-plane (indices).
     
     Parameters:
     -----------
     t : np.ndarray
-        Trajectory parameter (index 0 to N[0]-1 for complete trajectory)
-    radius : int
-        Radius of the circle (in grid indices)
-    center_y : int
-        Center in y (index)
-    center_z : int
-        Fixed position in z (index)
+        Trajectory parameter (0 to min(N[0], N[1])-1)
+    z_pos : int
+        Fixed position on z (index)
     N : np.ndarray
-        Grid dimensions
+        Grid dimensions (N[0], N[1], N[2])
     
     Returns:
     -------
     np.ndarray
         Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    # Normalized angle parameter (0 to 2π)
-    theta = 2 * np.pi * t / N[0]
-    
-    y = center_y + radius * np.cos(theta)
-    x = radius * np.sin(theta)
-    z = np.full_like(t, center_z, dtype=int)
-    
-    # Clip aux limites
-    x = np.clip(x, 0, N[0]-1).astype(int)
-    y = np.clip(y, 0, N[1]-1).astype(int)
-    z = np.clip(z, 0, N[2]-1).astype(int)
-    
-    return np.array([x, y, z]).T
-
-
-def trajectory_helical(t: np.ndarray, pitch: int, radius: int, center_y: int, center_z: int,
-                       N: np.ndarray, Ninterp: int) -> np.ndarray:
-    """
-    Helical trajectory spiraling around a center (indices).
-    
-    Parameters:
-    -----------
-    t : np.ndarray
-        Trajectory parameter (index 0 to N[0]-1)
-    pitch : int
-        Helix pitch (x progression per complete turn)
-    radius : int
-        Helix radius (in indices)
-    center_y : int
-        Center in y (index)
-    center_z : int
-        Center in z (index)
-    N : np.ndarray
-        Grid dimensions
-    
-    Returns:
-    -------
-    np.ndarray
-        Trajectory points (n_points, 3) with [x, y, z] indices
-    """
-    # Number of complete rotations needed to cover the grid
-    num_rotations = round((N[0] - 1) / pitch)
-
-    # Angle progresses through multiple rotations
-    theta = 2 * np.pi * num_rotations * t / (N[0] - 1)
-
-    # X progresses across entire grid (0 to N[0]-1)
-    x = t  
-
-    y = center_y + radius * np.cos(theta)
-    z = center_z + radius * np.sin(theta)
-    
-    # Clip aux limites
-    x = np.clip(x, 0, N[0]-1).astype(int)
-    y = np.clip(y, 0, N[1]-1).astype(int)
-    z = np.clip(z, 0, N[2]-1).astype(int)
-    
-    return np.array([x, y, z]).T
-
-
-def trajectory_diagonal(t: np.ndarray, N: np.ndarray, Ninterp: int) -> np.ndarray:
-    """
-    Diagonal trajectory through the cube.
-    
-    Parameters:
-    -----------
-    t : np.ndarray
-        Trajectory parameter (0 to N[0]-1)
-    N : np.ndarray
-        Grid dimensions
-    Ninterp : int
-        Interpolation factor for grid dimensions
-    Returns:
-    -------
-    np.ndarray
-        Trajectory points (n_points, 3) with [x, y, z] indices
-    """
-    # X, y, z progression proportional
     x = t
-    y = (t * N[1] / N[0]).astype(int)
-    z = (t * N[2] / N[0]).astype(int)
+    y = N[1] - 1 - t
+    z = np.full_like(t, z_pos, dtype=int)
     
-    # Clip to limits
+    # Clip to grid limits
     x = np.clip(x, 0, N[0]-1).astype(int)
     y = np.clip(y, 0, N[1]-1).astype(int)
     z = np.clip(z, 0, N[2]-1).astype(int)

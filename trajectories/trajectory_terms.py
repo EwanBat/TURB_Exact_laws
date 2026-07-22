@@ -97,6 +97,9 @@ class TrajectoryTermsComputer:
     
     SOURCE_TERMS = frozenset([
         "source_dpan",
+        "source_dvdvdv",
+        "source_dbdbdv",
+        "source_dvdbdb",
     ])
         
     # ========== INITIALIZATION ==========

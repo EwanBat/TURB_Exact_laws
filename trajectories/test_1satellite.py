@@ -1,6 +1,4 @@
 # %% import libraries
-import os
-import numpy as np
 import logging
 from datetime import datetime
 from trajectories.trajectory_preprocess import preprocess_trajectory_from_ini, param_to_txt
@@ -43,9 +41,8 @@ quantities = config['quantities']
 method = run_params['method']
 nbsatellite = traj_param['nbsatellite']
 
-param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/parameters/'+name_output + '_' + trajectory_name + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
+param_to_txt(grid_param, traj_param, physical_param, laws, filename='result_traj/parameters/'+name_output + '_' + trajectory_name + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
 
-# see_trajectory_in_space(dic_param, trajectory, nbsatellite)
 
 from trajectories.trajectory_quantities import extract_and_compute_trajectory_quantities
 from trajectories.trajectory_terms import compute_all_terms_for_laws

@@ -47,7 +47,7 @@ def setup_logging(config_name: str = "trajectory_preprocess"):
     return logging
 
 
-def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict, 
+def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict, laws: list,
                  filename: str = "parameters_summary.txt"):
     """
     Save grid, trajectory, and physical parameters to a JSON file (with .txt extension).
@@ -84,12 +84,14 @@ def param_to_txt(grid_param: dict, traj_param: dict, physical_param: dict,
     grid_param_serializable = convert_to_serializable(grid_param)
     traj_param_serializable = convert_to_serializable(traj_param)
     physical_param_serializable = convert_to_serializable(physical_param)
+    laws_serializable = convert_to_serializable(laws)
     
     # Create output dictionary
     output_data = {
         'grid_param': grid_param_serializable,
         'traj_param': traj_param_serializable,
-        'physical_param': physical_param_serializable
+        'physical_param': physical_param_serializable,
+        'laws': laws_serializable
     }
     
     # Save to JSON file
