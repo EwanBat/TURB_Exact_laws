@@ -24,13 +24,12 @@ from trajectories.tools_trajectory_preprocessing import (
     trajectory_linear_minus_y,
     trajectory_linear_z,
     trajectory_linear_minus_z,
-    trajectory_circular_xy,
-    trajectory_helical,
-    trajectory_diagonal,
+    trajectory_linear_xy,
     combine_multiple_trajectories,
     generate_all_trajectory_kwargs_linear_x,
     generate_all_trajectory_kwargs_linear_y,
     generate_all_trajectory_kwargs_linear_z,
+    generate_all_trajectory_kwargs_linear_xy,
 )
 
 # ========== UTILITY FUNCTIONS ==========
@@ -375,6 +374,13 @@ def preprocess_trajectory_from_ini(ini_file: str,
             if verbose:
                 logging.info(f"  Generating ALL trajectory positions for linear_z...")
                 logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
+        elif trajectory_method == "linear_xy":
+            trajectory_kwargs_list = generate_all_trajectory_kwargs_linear_xy(grid_param['N'], step_traj)
+            name_output += f"_all_step{step_traj}"
+            traj_param['step_traj'] = step_traj
+            if verbose:
+                logging.info(f"  Generating ALL trajectory positions for linear_xy...")
+                logging.info(f"    Total combinations: {len(trajectory_kwargs_list)} trajectories")
         else:
             logging.warning(f"  'all' mode not yet implemented for {trajectory_method}, using default")
             trajectory_kwargs_list = [{}]
@@ -388,12 +394,8 @@ def preprocess_trajectory_from_ini(ini_file: str,
         trajectory_func = trajectory_linear_y
     elif trajectory_method == "linear_z":
         trajectory_func = trajectory_linear_z
-    elif trajectory_method == "circular_xy":
-        trajectory_func = trajectory_circular_xy
-    elif trajectory_method == "helical":
-        trajectory_func = trajectory_helical
-    elif trajectory_method == "diagonal":
-        trajectory_func = trajectory_diagonal
+    elif trajectory_method == "linear_xy":
+        trajectory_func = trajectory_linear_xy
     elif trajectory_method == "linear_minus_y":
         trajectory_func = trajectory_linear_minus_y
     elif trajectory_method == "linear_minus_x":

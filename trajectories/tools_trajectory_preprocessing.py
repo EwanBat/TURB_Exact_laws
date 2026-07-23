@@ -193,7 +193,7 @@ def trajectory_linear_minus_z(t: np.ndarray, x_pos: int, y_pos: int,
     z = np.clip(z, 0, N[2]-1).astype(int)
     return np.array([x, y, z]).T
 
-def trajectory_linear_xy(t: np.ndarray, z_pos: int, N: np.ndarray, Ninterp: int) -> np.ndarray:
+def trajectory_linear_xy(t: np.ndarray, x_pos: int, y_pos: int, z_pos: int, N: np.ndarray, Ninterp: int) -> np.ndarray:
     """
     Linear trajectory along the diagonal in the xy-plane (indices).
     
@@ -201,6 +201,10 @@ def trajectory_linear_xy(t: np.ndarray, z_pos: int, N: np.ndarray, Ninterp: int)
     -----------
     t : np.ndarray
         Trajectory parameter (0 to min(N[0], N[1])-1)
+    x_pos : int
+        Fixed position on x (index)
+    y_pos : int
+        Fixed position on y (index)
     z_pos : int
         Fixed position on z (index)
     N : np.ndarray
@@ -211,14 +215,14 @@ def trajectory_linear_xy(t: np.ndarray, z_pos: int, N: np.ndarray, Ninterp: int)
     np.ndarray
         Trajectory points (n_points, 3) with [x, y, z] indices
     """
-    x = t
-    y = N[1] - 1 - t
+    x = x_pos + t
+    y = y_pos - t
     z = np.full_like(t, z_pos, dtype=int)
     
     # Clip to grid limits
-    x = np.clip(x, 0, N[0]-1).astype(int)
-    y = np.clip(y, 0, N[1]-1).astype(int)
-    z = np.clip(z, 0, N[2]-1).astype(int)
+    x = np.clip(x, 0, N[0]-1).astype(int) % N[0]
+    y = np.clip(y, 0, N[1]-1).astype(int) % N[1]
+    z = np.clip(z, 0, N[2]-1).astype(int) % N[2]
     
     return np.array([x, y, z]).T
 
@@ -309,6 +313,36 @@ def generate_all_trajectory_kwargs_linear_z(N: np.ndarray, step: int) -> list:
                 'y_pos': int(y_pos)
             })
     
+    return trajectory_kwargs_list
+
+def generate_all_trajectory_kwargs_linear_xy(N: np.ndarray, step: int) -> list:
+    """
+    Generate all possible trajectory_kwargs combinations for linear_xy trajectory.
+
+    Creates a trajectory for each z position in the grid, covering all possible
+    fixed planes perpendicular to the xy diagonal trajectory.
+
+    Parameters:
+    -----------
+    N : np.ndarray
+        Grid dimensions (N[0], N[1], N[2])
+    step : int
+        Step size for trajectory generation
+
+    Returns:
+    -------
+    list : List of dictionaries with all z_pos values
+    """
+    trajectory_kwargs_list = []
+
+    for z_pos in range(0, N[2], step):
+        for x_pos, y_pos in zip(range(0, N[0], step), range(N[1]-1, -1, -step)):
+            trajectory_kwargs_list.append({
+                'x_pos': int(x_pos),
+                'y_pos': int(y_pos),
+                'z_pos': int(z_pos)
+            })
+
     return trajectory_kwargs_list
 
 def _compute_trajectory_coordinates(trajectory: np.ndarray,
@@ -549,6 +583,8 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         t = np.arange(Ninterp * N[1]) / Ninterp
     elif traj_param['trajectory_method'] == 'linear_z' or traj_param['trajectory_method'] == 'linear_minus_z':
         t = np.arange(Ninterp * N[2]) / Ninterp
+    elif traj_param['trajectory_method'] == 'linear_xy':
+        t = np.arange(Ninterp * min(N[0], N[1])) / Ninterp
     
     # Get dimensions from first trajectory
     n_points = len(t)
