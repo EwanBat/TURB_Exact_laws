@@ -226,6 +226,38 @@ def trajectory_linear_xy(t: np.ndarray, x_pos: int, y_pos: int, z_pos: int, N: n
     
     return np.array([x, y, z]).T
 
+
+def _get_satellite_offsets(nbsatellite: int,
+                           gap_satellite: float,
+                           grid_param: dict,
+                           trajectory_method: str | None = None) -> dict:
+    """Build the satellite offsets used to sample the mesh around the trajectory."""
+    c = np.asarray(grid_param['c'])
+    satellite_offsets = {'sat_0': np.zeros(3, dtype=float)}
+
+    if nbsatellite == 1:
+        return satellite_offsets
+
+    if nbsatellite == 4:
+        satellite_offsets.update({
+            'sat_1': np.array([gap_satellite, 0, 0], dtype=float) * c,
+            'sat_2': np.array([0, gap_satellite, 0], dtype=float) * c,
+            'sat_3': np.array([0, 0, gap_satellite], dtype=float) * c,
+        })
+        return satellite_offsets
+
+    if nbsatellite == 9:
+        sat_index = 1
+        for dx in (-1, 1):
+            for dy in (-1, 1):
+                for dz in (-1, 1):
+                    offset_index = np.array([dx, dy, dz], dtype=float) * gap_satellite
+                    satellite_offsets[f'sat_{sat_index}'] = offset_index * c
+                    sat_index += 1
+        return satellite_offsets
+
+    raise ValueError(f"nbsatellite must be 1, 4 or 9, got {nbsatellite}")
+
 # ====================== Trajectory generation and data extraction ======================
 
 def generate_all_trajectory_kwargs_linear_x(N: np.ndarray, step: int) -> list:
@@ -468,7 +500,7 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
     trajectory : np.ndarray
         Central trajectory (n_points, 3) in indices
     traj_param : dict
-        Number of satellites (1 or 4) and gap between satellites (if nbsatellite=4)
+        Number of satellites (1, 4 or 9) and gap between satellites (if needed)
     grid_param : dict
         Grid parameters (N, L, c) for physical coordinate conversion
     Returns:
@@ -480,48 +512,33 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
     N = grid_param['N']
     nbsatellite = traj_param['nbsatellite']
 
-    if nbsatellite == 1:
-        # ===== SINGLE SATELLITE =====
-        trajectory_data = {'sat_0': {}}
-        for key in dic_datas.keys():
-            if isinstance(dic_datas[key], np.ndarray) and dic_datas[key].ndim == 3:
-                # Extract values along the trajectory
-                trajectory_data['sat_0'][key] = dic_datas[key][trajectory[:, 0], trajectory[:, 1], trajectory[:, 2]]
-            else:
-                trajectory_data['sat_0'][key] = dic_datas[key]
-    
-    elif nbsatellite == 4:
-        # ========== QUAD SATELLITE =========
-        # Define 4 satellites in a centered square
-        satellites = {
-            'sat_0': np.array([0, 0, 0]),   # Center
-            'sat_1': traj_param['dR1'] / grid_param['c'],  # x positive
-            'sat_2': traj_param['dR2'] / grid_param['c'],  # y positive
-            'sat_3': traj_param['dR3'] / grid_param['c'],   # z positive
-        }
-        # Generate 4 trajectories
-        trajectories = {}
-        for sat_name, offset in satellites.items():
-            trajectories[sat_name] = trajectory + offset[np.newaxis, :]  # Apply offset to trajectory
-            # Using periodic boundary conditions to wrap around the grid
-            trajectories[sat_name][:, 0] = trajectories[sat_name][:, 0] % N[0]
-            trajectories[sat_name][:, 1] = trajectories[sat_name][:, 1] % N[1]
-            trajectories[sat_name][:, 2] = trajectories[sat_name][:, 2] % N[2]
-            trajectories[sat_name] = trajectories[sat_name].astype(int)  # Ensure indices are integers
-        # Extract data for each satellite - reorganized structure
-        trajectory_data = {sat_name: {} for sat_name in satellites.keys()}
-        
-        for key in dic_datas.keys():
-            if isinstance(dic_datas[key], np.ndarray) and dic_datas[key].ndim == 3:
-                for sat_name, traj in trajectories.items():
-                    # Extract values along this satellite trajectory
-                    trajectory_data[sat_name][key] = dic_datas[key][traj[:,0], traj[:,1], traj[:,2]]
-            else:
-                # Keep scalars for all satellites
-                for sat_name in satellites.keys():
-                    trajectory_data[sat_name][key] = dic_datas[key]
-    else:
-        raise ValueError(f"nbsatellite must be 1 or 4, got {nbsatellite}")
+    satellite_offsets = traj_param.get('satellite_offsets')
+    if satellite_offsets is None:
+        satellite_offsets = _get_satellite_offsets(
+            nbsatellite,
+            traj_param.get('gap_satellite', 1),
+            grid_param,
+            traj_param.get('trajectory_method')
+        )
+
+    trajectory_data = {sat_name: {} for sat_name in satellite_offsets.keys()}
+    trajectories = {}
+
+    for sat_name, offset in satellite_offsets.items():
+        offset_index = np.rint(offset / grid_param['c']).astype(int)
+        trajectories[sat_name] = trajectory + offset_index[np.newaxis, :]
+        trajectories[sat_name][:, 0] = trajectories[sat_name][:, 0] % N[0]
+        trajectories[sat_name][:, 1] = trajectories[sat_name][:, 1] % N[1]
+        trajectories[sat_name][:, 2] = trajectories[sat_name][:, 2] % N[2]
+        trajectories[sat_name] = trajectories[sat_name].astype(int)
+
+    for key in dic_datas.keys():
+        if isinstance(dic_datas[key], np.ndarray) and dic_datas[key].ndim == 3:
+            for sat_name, traj in trajectories.items():
+                trajectory_data[sat_name][key] = dic_datas[key][traj[:, 0], traj[:, 1], traj[:, 2]]
+        else:
+            for sat_name in satellite_offsets.keys():
+                trajectory_data[sat_name][key] = dic_datas[key]
     
     return trajectory_data
 
@@ -547,8 +564,8 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         Trajectory parameters containing:
         - trajectory_kwargs_list: list of parameter dicts for each trajectory
         - Ninterp: interpolation factor
-        - gap_satellite: separation between satellites (if nbsatellite=4)
-        - nbsatellite: number of satellites (1 or 4)
+        - gap_satellite: separation between satellites (if nbsatellite > 1)
+        - nbsatellite: number of satellites (1, 4 or 9)
     grid_param : dict
         Grid parameters (N, L, c) defining the computational domain
     verbose : bool
@@ -589,19 +606,19 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     # Get dimensions from first trajectory
     n_points = len(t)
 
-    if nbsatellite == 4: # Define satellite offsets for 4-satellite configuration
-        # dR1 = np.array([2*gap_satellite, 2*gap_satellite, 0]) * grid_param['c']  # Convert gap from indices to physical units
-        # dR2 = np.array([2*gap_satellite, 0, 1*gap_satellite]) * grid_param['c']
-        # dR3 = np.array([0, 2*gap_satellite, 1*gap_satellite]) * grid_param['c']
-        dR1 = np.array([gap_satellite, 0, 0]) * grid_param['c']  # Convert gap from indices to physical units
-        dR2 = np.array([0, gap_satellite, 0]) * grid_param['c']
-        dR3 = np.array([0, 0, gap_satellite]) * grid_param['c']
-        traj_param['dR1'] = dR1
-        traj_param['dR2'] = dR2
-        traj_param['dR3'] = dR3
+    satellite_offsets = _get_satellite_offsets(nbsatellite, gap_satellite, grid_param, traj_param.get('trajectory_method'))
+    traj_param['satellite_offsets'] = satellite_offsets
+
+    if nbsatellite == 4:
+        traj_param['dR1'] = satellite_offsets['sat_1']
+        traj_param['dR2'] = satellite_offsets['sat_2']
+        traj_param['dR3'] = satellite_offsets['sat_3']
 
     # Initialize output structure: {sat_name: {var_name: array(n_trajectories, n_points)}}
-    dic_datas_combined = {"sat_"+str(i): {var : np.zeros((n_trajectories, n_points)) for var in dic_datas_3d.keys()} for i in range(nbsatellite)}
+    dic_datas_combined = {
+        sat_name: {var: np.zeros((n_trajectories, n_points)) for var in dic_datas_3d.keys()}
+        for sat_name in satellite_offsets.keys()
+    }
 
     for idx, trajectory_kwargs in enumerate(trajectory_kwargs_list):
         trajectories_list.append(trajectory_func(t, N=N, Ninterp=Ninterp, **trajectory_kwargs))
