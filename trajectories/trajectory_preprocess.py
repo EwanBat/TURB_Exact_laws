@@ -434,7 +434,7 @@ class TrajectoryPreprocessor:
         self._compute_mean_params(dic_datas)
 
         if self.verbose:
-            logger.info(f"\n  [OK] Extraction complete: {len(dic_datas)} field quantities")
+            logger.info(f"  [OK] Extraction complete: {len(dic_datas)} field quantities")
             logger.info(f"    Total trajectories processed: {len(self.traj_param['trajectories_list'])}")
 
         return {

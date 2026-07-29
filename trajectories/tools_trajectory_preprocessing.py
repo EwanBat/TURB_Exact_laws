@@ -586,7 +586,7 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     nbsatellite = traj_param.get('nbsatellite', 1)
 
     if verbose:
-        logging.info(f"\n  Processing {n_trajectories} trajectory/trajectories...")
+        logging.info(f"  Processing {n_trajectories} trajectory/trajectories...")
     
     # Generate all trajectories and extract data
     trajectories_list = []

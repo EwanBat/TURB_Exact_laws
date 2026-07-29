@@ -167,6 +167,272 @@ class TrajectoryTermsComputer:
         
         return terms
 
+    def _get_incremental_fs(self):
+        if self.traj_param['trajectory_method'] == "linear_x":
+            return 1 / self.grid_param['c'][0]
+        elif self.traj_param['trajectory_method'] == "linear_y":
+            return 1 / self.grid_param['c'][1]
+        elif self.traj_param['trajectory_method'] == "linear_z":
+            return 1 / self.grid_param['c'][2]
+
+    def _compute_terms_incremental_1sat(self, dic_quantities, required_terms):
+        result = {'sat_0': {}}
+        fs = self._get_incremental_fs()
+        computed = []
+        missing = []
+
+        merged_quantities = {}
+        for quantity in dic_quantities['sat_0'].keys():
+            merged_quantities[quantity] = np.concatenate((
+                dic_quantities['sat_0'][quantity],
+                dic_quantities['sat_0'][quantity]
+            ), axis=1)
+
+        for term_name in required_terms:
+            try:
+                term_obj = TERMS[term_name]
+                if self.run_params.get('filter_enabled', False):
+                    result['sat_0'][term_name] = term_obj.calc_filter(
+                        self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                else:
+                    result['sat_0'][term_name] = term_obj.calc_incr_traj(
+                        self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                computed.append(term_name)
+            except Exception as e:
+                missing.append(term_name)
+                if self.verbose:
+                    logger.error(f"  [ERROR] Failed to compute term {term_name}: {e}")
+
+        if self.verbose:
+            for t in computed:
+                logger.info(f"  [OK] Term {t} computed for sat_0")
+            for t in missing:
+                logger.warning(f"  [WARNING] Term {t} NOT computed for sat_0")
+
+        return result
+
+    def _compute_terms_incremental_4sat(self, dic_quantities, required_terms):
+        result = {sat_name: {} for sat_name in self._sat_names}
+        fs = self._get_incremental_fs()
+        sat1 = 'sat_0'
+
+        for sat2 in self._sat_names:
+            computed = []
+            missing = []
+
+            merged_quantities = {}
+            for quantity in dic_quantities[sat1].keys():
+                if quantity in dic_quantities[sat2]:
+                    merged_quantities[quantity] = np.concatenate((
+                        dic_quantities[sat1][quantity],
+                        dic_quantities[sat2][quantity]
+                    ), axis=1)
+
+            set_num_threads(self.run_params.get('max_workers', 1))
+
+            for term_name in required_terms:
+                try:
+                    term_obj = TERMS[term_name]
+                    if term_name in self.FLUX_TERMS:
+                        if self.run_params.get('filter_enabled', False):
+                            result[sat2][term_name] = term_obj.calc_filter(
+                                self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                        else:
+                            result[sat2][term_name] = term_obj.calc_incr_traj(
+                                self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                        computed.append(term_name)
+                    elif term_name in self.SOURCE_TERMS and sat2 == 'sat_0':
+                        if self.run_params.get('filter_enabled', False):
+                            result[sat2][term_name] = term_obj.calc_filter(
+                                self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                        else:
+                            result[sat2][term_name] = term_obj.calc_incr_traj(
+                                self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                        computed.append(term_name)
+                    else:
+                        missing.append(term_name)
+                except Exception as e:
+                    missing.append(term_name)
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Failed to compute term {term_name} for {sat2}: {e}")
+
+            if self.verbose:
+                for t in computed:
+                    logger.info(f"  [OK] Term {t} computed for {sat2}")
+                for t in missing:
+                    logger.warning(f"  [WARNING] Term {t} NOT computed for {sat2}")
+
+        return result
+
+    def _compute_terms_incremental_9sat(self, dic_quantities, required_terms):
+        result = {sat_name: {} for sat_name in self._sat_names}
+        fs = self._get_incremental_fs()
+        sat1 = 'sat_0'
+
+        flux_terms = [t for t in required_terms if t in self.FLUX_TERMS]
+        source_terms = [t for t in required_terms if t in self.SOURCE_TERMS]
+        other_terms = [t for t in required_terms if t not in self.FLUX_TERMS and t not in self.SOURCE_TERMS]
+        all_terms = flux_terms + other_terms
+
+        for sat2 in self._sat_names:
+            computed = []
+            missing = []
+
+            merged_quantities = {}
+            for quantity in dic_quantities[sat1].keys():
+                if quantity in dic_quantities[sat2]:
+                    merged_quantities[quantity] = np.concatenate((
+                        dic_quantities[sat1][quantity],
+                        dic_quantities[sat2][quantity]
+                    ), axis=1)
+
+            set_num_threads(self.run_params.get('max_workers', 1))
+
+            for term_name in flux_terms + other_terms:
+                try:
+                    term_obj = TERMS[term_name]
+                    if self.run_params.get('filter_enabled', False):
+                        result[sat2][term_name] = term_obj.calc_filter(
+                            self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                    else:
+                        result[sat2][term_name] = term_obj.calc_incr_traj(
+                            self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                    computed.append(term_name)
+                except Exception as e:
+                    missing.append(term_name)
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Failed to compute term {term_name} for {sat2}: {e}")
+
+            if self.verbose:
+                for t in computed:
+                    logger.info(f"  [OK] Term {t} computed for {sat2}")
+                for t in missing:
+                    logger.warning(f"  [WARNING] Term {t} NOT computed for {sat2}")
+
+        for term_name in source_terms:
+            term_obj = TERMS[term_name]
+            sat_results = []
+            for sat_k in [f'sat_{i}' for i in range(1, 9)]:
+                merged_quantities = {}
+                for quantity in dic_quantities[sat_k].keys():
+                    merged_quantities[quantity] = np.concatenate((
+                        dic_quantities[sat_k][quantity],
+                        dic_quantities[sat_k][quantity]
+                        ), axis=1)
+                try:
+                    if self.run_params.get('filter_enabled', False):
+                        val = term_obj.calc_filter(
+                            self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
+                    else:
+                        val = term_obj.calc_incr_traj(
+                            self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
+                    sat_results.append(val)
+                except Exception as e:
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Failed source term {term_name} for {sat_k}: {e}")
+
+            if sat_results:
+                result['sat_0'][term_name] = np.mean(sat_results, axis=0)
+                if self.verbose:
+                    logger.info(f"  [OK] Source term {term_name} averaged over {len(sat_results)} satellites -> sat_0")
+            else:
+                if self.verbose:
+                    logger.warning(f"  [WARNING] Source term {term_name} NOT computed (no valid satellite data)")
+
+        return result
+
+    def _compute_terms_fourier_1sat(self, dic_quantities, required_terms):
+        result = {'sat_0': {}}
+        computed = []
+        missing = []
+
+        for term_name in required_terms:
+            try:
+                term_obj = TERMS[term_name]
+                result['sat_0'][term_name] = term_obj.calc_fourier(
+                    **dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                if not isinstance(result['sat_0'][term_name], np.ndarray):
+                    result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
+                computed.append(term_name)
+            except Exception as e:
+                missing.append(term_name)
+                if self.verbose:
+                    logger.error(f"  [ERROR] Failed to compute term {term_name}: {e}")
+
+        if self.verbose:
+            for t in computed:
+                logger.info(f"  [OK] Term {t} computed for sat_0")
+            for t in missing:
+                logger.warning(f"  [WARNING] Term {t} NOT computed for sat_0")
+
+        return result
+
+    def _compute_terms_fourier_4sat(self, dic_quantities, required_terms):
+        result = {'sat_0': {}}
+        computed = []
+        missing = []
+
+        for term_name in required_terms:
+            try:
+                term_obj = TERMS[term_name]
+                if term_name in self.FLUX_TERMS:
+                    result['sat_0'][term_name] = term_obj.calc_with_fourier_4sat(
+                        **dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                elif term_name in self.SOURCE_TERMS:
+                    result['sat_0'][term_name] = term_obj.calc_fourier(
+                        **dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                else:
+                    missing.append(term_name)
+                    continue
+                if not isinstance(result['sat_0'][term_name], np.ndarray):
+                    result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
+                computed.append(term_name)
+            except Exception as e:
+                missing.append(term_name)
+                if self.verbose:
+                    logger.error(f"  [ERROR] Failed to compute term {term_name}: {e}")
+
+        if self.verbose:
+            for t in computed:
+                logger.info(f"  [OK] Term {t} computed for sat_0")
+            for t in missing:
+                logger.warning(f"  [WARNING] Term {t} NOT computed for sat_0")
+
+        return result
+
+    def _compute_terms_fourier_9sat(self, dic_quantities, required_terms):
+        result = {'sat_0': {}}
+        computed = []
+        missing = []
+
+        for term_name in required_terms:
+            try:
+                term_obj = TERMS[term_name]
+                if term_name in self.FLUX_TERMS:
+                    result['sat_0'][term_name] = term_obj.calc_with_fourier_4sat(
+                        **dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                elif term_name in self.SOURCE_TERMS:
+                    result['sat_0'][term_name] = term_obj.calc_fourier(
+                        **dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
+                else:
+                    missing.append(term_name)
+                    continue
+                if not isinstance(result['sat_0'][term_name], np.ndarray):
+                    result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
+                computed.append(term_name)
+            except Exception as e:
+                missing.append(term_name)
+                if self.verbose:
+                    logger.error(f"  [ERROR] Failed to compute term {term_name}: {e}")
+
+        if self.verbose:
+            for t in computed:
+                logger.info(f"  [OK] Term {t} computed for sat_0")
+            for t in missing:
+                logger.warning(f"  [WARNING] Term {t} NOT computed for sat_0")
+
+        return result
+
     def compute_all_terms_for_laws(self, dic_quantities: dict = None, laws: list = None, filename: str = "terms_trajectory.h5"):
         """
         Compute all terms required for the given laws.
@@ -180,8 +446,6 @@ class TrajectoryTermsComputer:
             Data structure: {sat_name: {var_name: array(n_trajectories, n_points)}, ...}
         laws : list[str]
             List of law names to compute terms for
-        method : str
-            Computation method ("fourier" or "incremental")
         filename : str
             Output HDF5 filename
         
@@ -189,129 +453,44 @@ class TrajectoryTermsComputer:
         -------
         dict : {sat_name: {term_name: array(n_trajectories, n_points)}, ...}
         """
-        
+
         if laws is None:
             laws = []
-        
-        # Get required terms from law specifications
+
         required_terms = self.list_required_terms(laws)
-        
+
         if self.verbose:
-            logger.info("\n" + "-"*70)
+            logger.info("\n" + "-" * 70)
             logger.info("FLUX AND SOURCE TERMS COMPUTATION")
             logger.info(f"  Computing {len(required_terms)} terms for {len(laws)} law(s)")
-            logger.info(f"  Data structure: {{sat_name: {{term_name: array(n_trajectories, n_points)}}}}")
-        
-        # Initialize result with satellite names
-        result = {sat_name: {} for sat_name in self._sat_names}
-        
-        if self.run_params.get('method') == "incremental":
-            if self.traj_param['trajectory_method'] == "linear_x":
-                fs = 1/self.grid_param['c'][0]
-            elif self.traj_param['trajectory_method'] == "linear_y":
-                fs = 1/self.grid_param['c'][1]
-            elif self.traj_param['trajectory_method'] == "linear_z":
-                fs = 1/self.grid_param['c'][2]
 
+        method = self.run_params.get('method')
+
+        if method == "incremental":
             if self.nbsatellite == 1:
-                try:
-                    merged_quantities = {}  # Initialize an array to hold merged quantities for each trajectory and point
-                    for quantity in dic_quantities['sat_0'].keys():
-                        merged_quantities.update({quantity: np.concatenate((
-                            dic_quantities['sat_0'][quantity],
-                            dic_quantities['sat_0'][quantity]
-                            ), axis=1)}) 
-                    
-                    for term_name in required_terms:
-                        term_obj = TERMS[term_name]
-                        if self.run_params.get('filter_enabled', False):
-                            result['sat_0'][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
-                        else:
-                            result['sat_0'][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
-
-                    logger.info(f"  [OK] Terms computed for satellite sat_0")
-                except Exception as e:
-                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
-                    raise
-            
+                result = self._compute_terms_incremental_1sat(dic_quantities, required_terms)
             elif self.nbsatellite == 4:
-                try:
-                    sat1 = 'sat_0'  # Reference satellite for merging quantities
-                    for sat2 in self._sat_names:
-                        merged_quantities = {}  # Initialize an array to hold merged quantities for each trajectory and point
-                        for quantity in dic_quantities[sat1].keys():
-                            if quantity in dic_quantities[sat2]:
-                                merged_quantities.update({quantity: np.concatenate((
-                                    dic_quantities[sat1][quantity],
-                                    dic_quantities[sat2][quantity]
-                                    ), axis=1)}) # Merge along points axis (axis=1) to create arrays of shape (n_trajectories, 2*n_points)
-                        set_num_threads(self.run_params.get('max_workers', 1))  # Set numba to use the specified number of threads
-                        for term_name in required_terms:
-                            term_obj = TERMS[term_name]
-                            if term_name in self.FLUX_TERMS:
-                                if self.run_params.get('filter_enabled', False):
-                                    result[sat2][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
-                                else:
-                                    result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
-
-                            elif term_name in self.SOURCE_TERMS and sat2 == 'sat_0':  # Compute source terms only for reference satellite
-                                if self.run_params.get('filter_enabled', False):
-                                    result[sat2][term_name] = term_obj.calc_filter(self.traj_param["n_points"], self.traj_param["n_trajectories"], fs, **merged_quantities)
-                                else:
-                                    result[sat2][term_name] = term_obj.calc_incr_traj(self.traj_param["n_points"], self.traj_param["n_trajectories"], **merged_quantities)
-
-                        logger.info(f"  [OK] Terms computed for satellite {sat2}")
-                except Exception as e:
-                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
-                    raise
-
-        elif self.run_params.get('method') == "fourier":
+                result = self._compute_terms_incremental_4sat(dic_quantities, required_terms)
+            elif self.nbsatellite == 9:
+                result = self._compute_terms_incremental_9sat(dic_quantities, required_terms)
+            else:
+                raise ValueError(f"Unsupported nbsatellite={self.nbsatellite} for method=incremental")
+        elif method == "fourier":
             if self.nbsatellite == 1:
-                try:
-                    for term_name in required_terms:
-                        term_obj = TERMS[term_name]
-                        result['sat_0'][term_name] = term_obj.calc_fourier(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
-                        if not isinstance(result['sat_0'][term_name], np.ndarray):
-                            result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
-                    logger.info(f"  [OK] Terms computed for satellite sat_0")
-                except Exception as e:
-                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
-                    raise
-        
+                result = self._compute_terms_fourier_1sat(dic_quantities, required_terms)
             elif self.nbsatellite == 4:
-                try:
-                    for term_name in required_terms:
-                        term_obj = TERMS[term_name]
-                        if term_name in self.FLUX_TERMS:
-                            result['sat_0'][term_name] = term_obj.calc_with_fourier_4sat(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
-                        elif term_name in self.SOURCE_TERMS:
-                            result['sat_0'][term_name] = term_obj.calc_fourier(**dic_quantities['sat_0'], dic_param=self._sat_param_cache['sat_0'], traj=True)
-                        if not isinstance(result['sat_0'][term_name], np.ndarray):
-                            result['sat_0'][term_name] = np.asarray(result['sat_0'][term_name])
-                    logger.info(f"  [OK] Terms computed for satellite sat_0")
-                except Exception as e:
-                    logger.error(f"Method {self.run_params.get('method')}, nbsatellite={self.nbsatellite} : {e}")
-                    raise
-        
-        if self.verbose:
-            logger.info(f"  [OK] All {len(required_terms)} terms computed successfully:")
-            logger.info(required_terms)
-        
-        self.terms_to_h5(result_terms=result, filename=filename)
+                result = self._compute_terms_fourier_4sat(dic_quantities, required_terms)
+            elif self.nbsatellite == 9:
+                result = self._compute_terms_fourier_9sat(dic_quantities, required_terms)
+            else:
+                raise ValueError(f"Unsupported nbsatellite={self.nbsatellite} for method=fourier")
+        else:
+            raise ValueError(f"Unknown method: {method}")
+
+        if filename:
+            self.terms_to_h5(result_terms=result, filename=filename)
 
         return result
-    
-    @njit(parallel=True)
-    def calc_incremental_trajectories(self, result:dict[np.ndarray], merged_quantities: dict, n_trajectories:int, n_points:int):
-
-        for dl in prange(n_points):
-            for t in prange(n_points):
-                tp = t + (n_points + dl) - n_points * (t + n_points + dl >= 2 * n_points)
-                for term_name, term_obj in TERMS.items():
-                    if term_name in self.FLUX_TERMS:
-                        result[term_name][[0, 1, 2], :, dl] += term_obj.calc_in_point_with_sympy_traj(t, tp, **merged_quantities)
-                    elif term_name in self.SOURCE_TERMS:
-                        result[term_name][:,dl] += term_obj.calc_in_point_with_sympy_traj(t, tp, **merged_quantities)
 
     def terms_to_h5(self, result_terms: dict, filename: str = "terms_trajectory.h5"):
         """

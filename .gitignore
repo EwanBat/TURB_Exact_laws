@@ -9,6 +9,8 @@ exact_laws/exact_laws_calc/laws/__pycache__/
 
 *.log
 
+*.png
+
 notebooks/
 
 visualisation/
