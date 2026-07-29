@@ -114,6 +114,10 @@ class TrajectoryLawsComputer:
                     law_terms, law_coeffs = self._apply_law_coefficients_4satellite(
                         dic_terms, law_obj, method=method
                     )
+                elif self.nbsatellite == 9:
+                    law_terms, law_coeffs = self._apply_law_coefficients_9satellite(
+                        dic_terms, law_obj, method=method
+                    )
                 
                 dic_law_terms['sat_0'].update(law_terms)
                 
@@ -165,33 +169,40 @@ class TrajectoryLawsComputer:
                          if not k.startswith(('div_', 'source_'))}
         
         incomputable_terms = []
-        
-        # Divergence terms: extract base term name and apply divergence operator
+
         for coeff_key, coeff_value in div_coeffs.items():
             term_name = coeff_key.replace('div_', '')
             if term_name in dic_terms_sat:
-                term_value = dic_terms_sat[term_name]
-                result[coeff_key] = divergence_1satellite(term_value, self.traj_param)
+                try:
+                    result[coeff_key] = divergence_1satellite(dic_terms_sat[term_name], self.traj_param)
+                    if self.verbose:
+                        logger.info(f"  [OK] Divergence {coeff_key} computed for sat_0")
+                except Exception as e:
+                    incomputable_terms.append((coeff_key, f"divergence failed: {e}"))
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Divergence {coeff_key} failed: {e}")
             else:
-                incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
-        
-        # Source terms: use directly if available
+                incomputable_terms.append((coeff_key, f"term '{term_name}' not in dic_terms_sat"))
+
         for coeff_key, coeff_value in source_coeffs.items():
             if coeff_key in dic_terms_sat:
                 result[coeff_key] = dic_terms_sat[coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Source term {coeff_key} used directly")
             else:
-                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
-        
-        # Simple terms: use directly if available
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms_sat"))
+
         for coeff_key, coeff_value in simple_coeffs.items():
             if coeff_key in dic_terms_sat:
-                term_value = dic_terms_sat[coeff_key]
-                result[coeff_key] = term_value
+                result[coeff_key] = dic_terms_sat[coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Simple term {coeff_key} used directly")
             else:
-                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
-        
-        if self.verbose and incomputable_terms:
-            logging.info(f"    [WARNING] {len(incomputable_terms)} terms could not be computed")
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms_sat"))
+
+        if incomputable_terms:
+            for key, reason in incomputable_terms:
+                logger.warning(f"  [WARNING] {key}: {reason}")
         
         return result, coeffs
     
@@ -229,32 +240,135 @@ class TrajectoryLawsComputer:
         
         incomputable_terms = []
 
-        # Divergence terms: compute using satellite geometry or pass through (fourier)
         for coeff_key, coeff_value in div_coeffs.items():
             term_name = coeff_key.replace('div_', '')
             if term_name in dic_terms['sat_0']:
-                if method == "incremental":
-                    result[coeff_key] = divergence_4satellite(dic_terms, term_name, self.traj_param)
-                elif method == "fourier":
-                    result[coeff_key] = dic_terms['sat_0'][term_name]
+                try:
+                    if method == "incremental":
+                        result[coeff_key] = divergence_4satellite(dic_terms, term_name, self.traj_param)
+                    elif method == "fourier":
+                        result[coeff_key] = dic_terms['sat_0'][term_name]
+                    if self.verbose:
+                        logger.info(f"  [OK] Divergence {coeff_key} computed")
+                except Exception as e:
+                    incomputable_terms.append((coeff_key, f"divergence failed: {e}"))
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Divergence {coeff_key} failed: {e}")
             else:
-                incomputable_terms.append((coeff_key, f"term '{term_name}' not computed"))
+                incomputable_terms.append((coeff_key, f"term '{term_name}' not in dic_terms['sat_0']"))
 
-        # Source terms: use directly if available
         for coeff_key, coeff_value in source_coeffs.items():
             if coeff_key in dic_terms['sat_0']:
                 result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Source term {coeff_key} used directly")
             else:
-                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms['sat_0']"))
 
-        # Simple terms: use directly if available
         for coeff_key, coeff_value in simple_coeffs.items():
             if coeff_key in dic_terms['sat_0']:
                 result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Simple term {coeff_key} used directly")
             else:
-                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not computed"))
-    
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms['sat_0']"))
+
+        if incomputable_terms:
+            for key, reason in incomputable_terms:
+                logger.warning(f"  [WARNING] {key}: {reason}")
+
         return result, coeffs_sat_0
+
+    def _get_9satellite_tuples_with_sat0(self):
+        satellite_offsets = self.traj_param.get('satellite_offsets', {})
+        if not satellite_offsets:
+            raise ValueError("Missing satellite_offsets in traj_param for nbsatellite=9")
+
+        faces = [
+            [1, 2, 5, 6],
+            [3, 4, 7, 8],
+            [1, 3, 5, 7],
+            [2, 4, 6, 8],
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+        ]
+
+        valid_tuples = []
+        for surface in faces:
+            for i in range(4):
+                t = tuple(surface[:i] + surface[i+1:])
+                valid_tuples.append(t)
+        return valid_tuples
+
+    def _apply_law_coefficients_9satellite(self, dic_terms: dict, law_obj, method: str = None):
+        params_clean = self._prepare_dic_param_for_terms_and_coeffs(self.physical_param)
+        law_terms, coeffs = law_obj.terms_and_coeffs(params_clean)
+        result = {}
+
+        div_coeffs = {k: v for k, v in coeffs.items() if k.startswith('div_')}
+        source_coeffs = {k: v for k, v in coeffs.items() if k.startswith('source_')}
+        simple_coeffs = {k: v for k, v in coeffs.items()
+                         if not k.startswith(('div_', 'source_'))}
+
+        incomputable_terms = []
+
+        for coeff_key, coeff_value in div_coeffs.items():
+            term_name = coeff_key.replace('div_', '')
+            if term_name in dic_terms['sat_0']:
+                try:
+                    if method == "incremental":
+                        tuples = self._get_9satellite_tuples_with_sat0()
+                        offsets = self.traj_param['satellite_offsets']
+                        div_results = []
+                        for (i, j, k) in tuples:
+                            dic_quant_sub = {
+                                'sat_0': dic_terms['sat_0'],
+                                'sat_1': dic_terms[f'sat_{i}'],
+                                'sat_2': dic_terms[f'sat_{j}'],
+                                'sat_3': dic_terms[f'sat_{k}'],
+                            }
+                            traj_param_sub = dict(self.traj_param)
+                            traj_param_sub['dR1'] = offsets[f'sat_{i}']
+                            traj_param_sub['dR2'] = offsets[f'sat_{j}']
+                            traj_param_sub['dR3'] = offsets[f'sat_{k}']
+                            div_results.append(divergence_4satellite(
+                                dic_quant_sub, term_name, traj_param_sub
+                            ))
+                        result[coeff_key] = np.mean(div_results, axis=0)
+                        if self.verbose:
+                            logger.info(f"  [OK] Divergence {coeff_key} averaged over {len(div_results)} tetrahedrons")
+                    elif method == "fourier":
+                        result[coeff_key] = dic_terms['sat_0'][term_name]
+                        if self.verbose:
+                            logger.info(f"  [OK] Divergence {coeff_key} passed through (fourier)")
+                except Exception as e:
+                    incomputable_terms.append((coeff_key, f"divergence failed: {e}"))
+                    if self.verbose:
+                        logger.error(f"  [ERROR] Divergence {coeff_key} failed: {e}")
+            else:
+                incomputable_terms.append((coeff_key, f"term '{term_name}' not in dic_terms['sat_0']"))
+
+        for coeff_key, coeff_value in source_coeffs.items():
+            if coeff_key in dic_terms['sat_0']:
+                result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Source term {coeff_key} used directly")
+            else:
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms['sat_0']"))
+
+        for coeff_key, coeff_value in simple_coeffs.items():
+            if coeff_key in dic_terms['sat_0']:
+                result[coeff_key] = dic_terms['sat_0'][coeff_key]
+                if self.verbose:
+                    logger.info(f"  [OK] Simple term {coeff_key} used directly")
+            else:
+                incomputable_terms.append((coeff_key, f"term '{coeff_key}' not in dic_terms['sat_0']"))
+
+        if incomputable_terms:
+            for key, reason in incomputable_terms:
+                logger.warning(f"  [WARNING] {key}: {reason}")
+
+        return result, coeffs
 
     def _prepare_dic_param_for_terms_and_coeffs(self, dic_param: dict):
         """
