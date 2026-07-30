@@ -120,6 +120,20 @@ class TrajectoryQuantitiesComputer:
 
     def __init__(self, verbose: bool = False, grid_param: dict = None,
                  physical_param: dict = None, traj_param: dict = None):
+        """
+        Initialize the trajectory quantities computer.
+
+        Parameters:
+        -----------
+        verbose : bool
+            Enable detailed logger
+        grid_param : dict, optional
+            Grid parameters
+        physical_param : dict, optional
+            Physical parameters
+        traj_param : dict, optional
+            Trajectory parameters including 'nbsatellite', 'gap_satellite', 'satellite_offsets'
+        """
         self.verbose = verbose
         self.grid_param = grid_param or {}
         self.physical_param = physical_param or {}
@@ -170,7 +184,24 @@ class TrajectoryQuantitiesComputer:
 
     def _list_required_quantities(self, laws=None, terms=None,
                                   quantities=None, method: str = None):
-        """Collect all quantities required by the given laws and terms."""
+        """
+        Collect all quantities required by the given laws and terms.
+
+        Parameters:
+        -----------
+        laws : list[str], optional
+            Law names; their variable requirements are fetched via LAWS[name].variables()
+        terms : list[str], optional
+            Term names; their variable requirements are fetched via TERMS[name].variables()
+        quantities : list[str], optional
+            Explicit list of additional quantities
+        method : str, optional
+            Computation method ('incremental' or 'fourier'), passed to .variables()
+
+        Returns:
+        -------
+        list[str] : Unique set of required quantity names
+        """
         quantities = list(quantities) if quantities else []
 
         if terms:
@@ -192,7 +223,27 @@ class TrajectoryQuantitiesComputer:
     # ========== PRIVATE COMPUTATION METHODS ==========
 
     def _compute_all_quantities(self, dic_datas: dict, available_quantities: list, filename: str):
-        """Dispatch to the correct computation path based on satellite count."""
+        """
+        Dispatch to the correct computation path based on satellite count.
+
+        For nbsatellite=1: single pass over all quantities.
+        For nbsatellite=4: non-gradient quantities per satellite + gradient from 4-sat.
+        For nbsatellite=9: non-gradient quantities per satellite + gradient from
+        face-based tetrahedrons averaged over 24 sub-tuples.
+
+        Parameters:
+        -----------
+        dic_datas : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        available_quantities : list[str]
+            Quantity names to compute
+        filename : str or None
+            If set, save results to HDF5
+
+        Returns:
+        -------
+        dict : {sat_name: {var_name: array(n_trajectories, n_points)}}
+        """
         dic_quantities = {sat_name: {} for sat_name in dic_datas.keys()}
     
         all_quantity_names = list(set(
@@ -245,7 +296,21 @@ class TrajectoryQuantitiesComputer:
         return dic_quantities
 
     def _compute_all_single_pass(self, dic_datas: dict, dic_quantities: dict, quantities: list):
-        """Compute all quantities in one pass (nbsatellite=1)."""
+        """
+        Compute all quantities in one pass (nbsatellite=1).
+
+        Iterates over all required quantities and computes them via the
+        QUANTITIES registry, storing results into dic_quantities.
+
+        Parameters:
+        -----------
+        dic_datas : dict
+            Raw input data {sat_name: {var_name: array}}
+        dic_quantities : dict
+            Output dict to populate {sat_name: {var_name: array}}
+        quantities : list[str]
+            Quantity names to compute
+        """
         for quantity_name in quantities:
             try:
                 for sat_name in dic_datas.keys():
@@ -259,7 +324,21 @@ class TrajectoryQuantitiesComputer:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
 
     def _compute_non_gradient_quantities(self, dic_datas: dict, dic_quantities: dict, quantities: list):
-        """Compute non-gradient quantities independently for each satellite."""
+        """
+        Compute non-gradient quantities independently for each satellite.
+
+        Skips quantities listed in GRADIENT_QUANTITIES; computes all others
+        per satellite using _compute_quantity_vectorized.
+
+        Parameters:
+        -----------
+        dic_datas : dict
+            Raw input data {sat_name: {var_name: array}}
+        dic_quantities : dict
+            Output dict to populate {sat_name: {var_name: array}}
+        quantities : list[str]
+            Quantity names to compute
+        """
         for quantity_name in quantities:
             if quantity_name in self.GRADIENT_QUANTITIES:
                 continue
@@ -275,14 +354,39 @@ class TrajectoryQuantitiesComputer:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
 
     def _merge_raw_data(self, dic_datas: dict, dic_quantities: dict):
-        """Copy raw input fields into dic_quantities so gradients can reference them."""
+        """
+        Copy raw input fields into dic_quantities so gradients can reference them.
+
+        For each satellite, copies any key from dic_datas that is not already
+        present in dic_quantities.
+
+        Parameters:
+        -----------
+        dic_datas : dict
+            Raw input data {sat_name: {var_name: array}}
+        dic_quantities : dict
+            Output dict to populate {sat_name: {var_name: array}}
+        """
         for sat_name in dic_datas.keys():
             for key, value in dic_datas[sat_name].items():
                 if key not in dic_quantities[sat_name]:
                     dic_quantities[sat_name][key] = value
 
     def _compute_gradient_4satellite(self, dic_quantities: dict, quantities: list):
-        """Compute gradient/divergence quantities using all 4 satellites."""
+        """
+        Compute gradient/divergence quantities using all 4 satellites.
+
+        For each quantity in GRADIENT_QUANTITIES, computes it via the
+        QUANTITIES registry using the multi-satellite dic_quantities,
+        storing results at sat_0.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array}} with data for all 4 satellites
+        quantities : list[str]
+            Quantity names to compute (only GRADIENT_QUANTITIES entries are processed)
+        """
         for quantity_name in quantities:
             if quantity_name not in self.GRADIENT_QUANTITIES:
                 continue
@@ -297,11 +401,16 @@ class TrajectoryQuantitiesComputer:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
 
     def _get_9satellite_faces_with_sat0(self):
-        """Generate 4 tetrahedral tuples per face of the cube with sat0 as reference.
+        """
+        Generate 4 tetrahedral tuples per face of the cube with sat0 as reference.
 
         For each face of the cube (6 faces), forms 4 combinations of 3 vertices,
         defining tetrahedrons with sat_0 at the center.
         This mirrors the approach used for flux divergence in trajectory_law.py.
+
+        Returns:
+        -------
+        list[tuple[int, int, int]] : 24 tetrahedral index tuples (i, j, k)
         """
         faces = [
             [1, 2, 5, 6],
@@ -319,12 +428,20 @@ class TrajectoryQuantitiesComputer:
         return valid_tuples
 
     def _compute_gradient_9satellite(self, dic_quantities: dict, quantities: list):
-        """Compute gradients using face-based tetrahedrons with sat0 as reference.
+        """
+        Compute gradients using face-based tetrahedrons with sat0 as reference.
 
         For each face of the cube, computes 4 gradients using sat_0 and 3 of
         the 4 face vertices, then averages all 24 tetrahedron results and
         stores the final gradient at sat_0.
         Mirrors the divergence calculation in trajectory_law.py.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array}} with data for all 9 satellites
+        quantities : list[str]
+            Quantity names to compute (only GRADIENT_QUANTITIES entries are processed)
         """
         satellite_offsets = self.traj_param.get('satellite_offsets', {})
         if not satellite_offsets:
@@ -408,7 +525,18 @@ class TrajectoryQuantitiesComputer:
         return mock_file.data
 
     def quantities_to_h5(self, dic_quant: dict, filename: str):
-        """Save computed quantities to HDF5 (structure: /sat_name/var_name)."""
+        """
+        Save computed quantities to HDF5 file.
+
+        Structure: /sat_name/var_name with gzip compression.
+
+        Parameters:
+        -----------
+        dic_quant : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        filename : str
+            Output HDF5 filename
+        """
         with h5py.File(filename, 'w') as f:
             for sat_name, sat_data in dic_quant.items():
                 group = f.create_group(sat_name)
@@ -424,7 +552,38 @@ def extract_and_compute_trajectory_quantities(dic_datas: dict, grid_param: dict 
                                               laws=None, terms=None, quantities=None,
                                               method: str = None, verbose: bool = False,
                                               filename: str = "computed_quantities.h5"):
-    """Backward compatibility wrapper. Use TrajectoryQuantitiesComputer instead."""
+    """
+    Backward compatibility wrapper for extract_and_compute.
+
+    Deprecated: Use TrajectoryQuantitiesComputer instead.
+
+    Parameters:
+    -----------
+    dic_datas : dict
+        {sat_name: {var_name: array(n_trajectories, n_points)}}
+    grid_param : dict, optional
+        Grid parameters
+    traj_param : dict, optional
+        Trajectory parameters
+    physical_param : dict, optional
+        Physical parameters
+    laws : list[str], optional
+        Law names to derive quantity requirements
+    terms : list[str], optional
+        Term names to derive quantity requirements
+    quantities : list[str], optional
+        Explicit list of quantities to compute
+    method : str, optional
+        Computation method
+    verbose : bool
+        Enable detailed logger
+    filename : str
+        Output HDF5 filename
+
+    Returns:
+    -------
+    dict : {sat_name: {var_name: array(n_trajectories, n_points)}}
+    """
     computer = TrajectoryQuantitiesComputer(
         verbose=verbose, grid_param=grid_param,
         physical_param=physical_param, traj_param=traj_param

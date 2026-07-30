@@ -280,6 +280,16 @@ class TrajectoryLawsComputer:
         return result, coeffs_sat_0
 
     def _get_9satellite_tuples_with_sat0(self):
+        """
+        Generate 4 tetrahedral index tuples per face of the cube for 9-satellite geometry.
+
+        For each of the 6 cube faces, forms 4 combinations of 3 satellite indices,
+        defining tetrahedrons with sat_0 at the center. Produces 24 tuples total.
+
+        Returns:
+        -------
+        list[tuple[int, int, int]] : 24 tetrahedral index tuples (i, j, k)
+        """
         satellite_offsets = self.traj_param.get('satellite_offsets', {})
         if not satellite_offsets:
             raise ValueError("Missing satellite_offsets in traj_param for nbsatellite=9")
@@ -301,6 +311,26 @@ class TrajectoryLawsComputer:
         return valid_tuples
 
     def _apply_law_coefficients_9satellite(self, dic_terms: dict, law_obj, method: str = None):
+        """
+        Apply law coefficients to computed terms for 9-satellite cube configuration.
+
+        For divergence terms: averages over 24 tetrahedral sub-groups formed from
+        the 6 cube faces (incremental method) or passes through sat_0 (fourier).
+        Source and simple terms used directly from sat_0.
+
+        Parameters:
+        -----------
+        dic_terms : dict
+            {sat_0: {...}, sat_1: {...}, ..., sat_8: {...}}
+        law_obj : AbstractLaw
+            Has terms_and_coeffs() method
+        method : str, optional
+            'incremental' or 'fourier' for divergence calculation
+
+        Returns:
+        -------
+        tuple : (result_dict, coefficients_dict)
+        """
         params_clean = self._prepare_dic_param_for_terms_and_coeffs(self.physical_param)
         law_terms, coeffs = law_obj.terms_and_coeffs(params_clean)
         result = {}
@@ -448,6 +478,29 @@ def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_pa
                                         verbose:bool=False):
     """
     Backward compatibility wrapper. Use TrajectoryLawsComputer.compute_laws_terms instead.
+
+    Parameters:
+    -----------
+    dic_terms : dict
+        {sat_name: {term_name: array(n_trajectories, n_points)}}
+    physical_param : dict, optional
+        Physical parameters
+    traj_param : dict, optional
+        Trajectory parameters including 'nbsatellite'
+    filename : str
+        Output HDF5 file path
+    laws : list[str], optional
+        Law names to process
+    method : str, optional
+        Computation method ('incremental' or 'fourier')
+    verbose : bool
+        Enable detailed logging
+
+    Returns:
+    -------
+    tuple : (dic_law_terms, dic_coefficients)
+            - dic_law_terms: {sat_name: {term_coeff_key: array}}
+            - dic_coefficients: {law_term_key: coefficient_value}
     """
     computer = TrajectoryLawsComputer(verbose=verbose, 
                                      physical_param=physical_param,

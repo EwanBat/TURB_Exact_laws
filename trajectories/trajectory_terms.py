@@ -107,7 +107,7 @@ class TrajectoryTermsComputer:
     def __init__(self, verbose: bool = False, grid_param: dict = None, physical_param: dict = None, traj_param: dict = None, run_params: dict = None):
         """
         Initialize the trajectory terms computer.
-        
+
         Parameters:
         -----------
         verbose : bool
@@ -118,8 +118,8 @@ class TrajectoryTermsComputer:
             Physical parameters
         traj_param : dict, optional
             Trajectory parameters including 'nbsatellite'
-        max_workers : int
-            Maximum number of threads for ThreadPoolExecutor (default: 2)
+        run_params : dict, optional
+            Runtime parameters including 'method', 'max_workers', 'filter_enabled'
         """
         self.verbose = verbose
         self.grid_param = grid_param or {}
@@ -168,6 +168,13 @@ class TrajectoryTermsComputer:
         return terms
 
     def _get_incremental_fs(self):
+        """
+        Get the incremental frequency based on trajectory method.
+
+        Returns:
+        -------
+        float : Frequency increment = 1 / grid spacing along the trajectory direction
+        """
         if self.traj_param['trajectory_method'] == "linear_x":
             return 1 / self.grid_param['c'][0]
         elif self.traj_param['trajectory_method'] == "linear_y":
@@ -176,6 +183,20 @@ class TrajectoryTermsComputer:
             return 1 / self.grid_param['c'][2]
 
     def _compute_terms_incremental_1sat(self, dic_quantities, required_terms):
+        """
+        Compute terms using incremental method for single satellite.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        required_terms : list[str]
+            Names of terms to compute
+
+        Returns:
+        -------
+        dict : {'sat_0': {term_name: array(n_trajectories, n_points)}}
+        """
         result = {'sat_0': {}}
         fs = self._get_incremental_fs()
         n_points = self.traj_param["n_points"]
@@ -215,6 +236,23 @@ class TrajectoryTermsComputer:
         return result
 
     def _compute_terms_incremental_4sat(self, dic_quantities, required_terms):
+        """
+        Compute terms using incremental method for 4-satellite formation.
+
+        Flux terms use merged quantities from sat_0 and sat_i.
+        Source terms are computed from sat_0 only.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        required_terms : list[str]
+            Names of terms to compute
+
+        Returns:
+        -------
+        dict : {sat_name: {term_name: array(n_trajectories, n_points)}}
+        """
         result = {sat_name: {} for sat_name in self._sat_names}
         fs = self._get_incremental_fs()
         sat1 = 'sat_0'
@@ -279,6 +317,23 @@ class TrajectoryTermsComputer:
         return result
 
     def _compute_terms_incremental_9sat(self, dic_quantities, required_terms):
+        """
+        Compute terms using incremental method for 9-satellite formation.
+
+        Flux and other terms use merged quantities from sat_0 and sat_i pairs.
+        Source terms are computed from sat_0 merged with itself.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        required_terms : list[str]
+            Names of terms to compute
+
+        Returns:
+        -------
+        dict : {sat_name: {term_name: array(n_trajectories, n_points)}}
+        """
         result = {sat_name: {} for sat_name in self._sat_names}
         fs = self._get_incremental_fs()
         sat1 = 'sat_0'
@@ -351,6 +406,20 @@ class TrajectoryTermsComputer:
         return result
 
     def _compute_terms_fourier_1sat(self, dic_quantities, required_terms):
+        """
+        Compute terms using Fourier method for single satellite.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        required_terms : list[str]
+            Names of terms to compute
+
+        Returns:
+        -------
+        dict : {'sat_0': {term_name: array(n_trajectories, n_points)}}
+        """
         result = {'sat_0': {}}
         computed = []
         missing = []
@@ -377,6 +446,22 @@ class TrajectoryTermsComputer:
         return result
 
     def _compute_terms_fourier_multi(self, dic_quantities, required_terms):
+        """
+        Compute terms using Fourier method for multi-satellite configuration (4 or 9).
+
+        Flux terms use calc_with_fourier_4sat, source terms use calc_fourier.
+
+        Parameters:
+        -----------
+        dic_quantities : dict
+            {sat_name: {var_name: array(n_trajectories, n_points)}}
+        required_terms : list[str]
+            Names of terms to compute
+
+        Returns:
+        -------
+        dict : {'sat_0': {term_name: array(n_trajectories, n_points)}}
+        """
         result = {'sat_0': {}}
         computed = []
         missing = []
