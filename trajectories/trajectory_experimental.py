@@ -16,7 +16,6 @@ Key features:
 
 import logging
 import numpy as np
-from pandas_ods_reader import read_ods
 import json
 from pathlib import Path
 from typing import Tuple, Dict, List, Optional

@@ -67,9 +67,9 @@ def calc_exact_laws_from_config(config_file, run_config, backup):
     logging.info(message)
     
     # Init Original_dataset
-    #if backup.already:
+    # if backup.already:
     #    original_dataset = backup.download('data_origin')
-    #else:
+    # else:
     #    original_dataset, laws, terms = initialise_original_dataset(input_filename)
     #    if run_config.rank == 0:
     #        backup.save(original_dataset, 'data_origin')
