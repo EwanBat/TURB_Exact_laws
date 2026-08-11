@@ -214,6 +214,19 @@ class TrajectoryPreprocessor:
         self.trajectory_method = config["TRAJECTORY_PARAMS"].get("trajectory_method", None)
         step_traj = config["TRAJECTORY_PARAMS"].getint("step_traj", None)
 
+        formation = config["TRAJECTORY_PARAMS"].get("formation", "star").strip().lower()
+        if formation not in ("star", "cross"):
+            raise ValueError(
+                f"Unsupported formation value: {formation}. "
+                f"Expected 'star' or 'cross' (only used for nbsatellite=9)."
+            )
+        if nbsatellite != 9 and "formation" in config["TRAJECTORY_PARAMS"]:
+            logger.warning(
+                f"  [WARNING] 'formation' is only meaningful for nbsatellite=9, "
+                f"ignoring value '{formation}' for nbsatellite={nbsatellite}"
+            )
+            formation = "star"
+
         trajectory_kwargs_str = config["TRAJECTORY_PARAMS"].get("trajectory_kwargs", "[{}]")
         if trajectory_kwargs_str.strip().lower() in ("'all'", '"all"'):
             self.trajectory_kwargs_list = 'all'
@@ -231,6 +244,7 @@ class TrajectoryPreprocessor:
             "nbsatellite": nbsatellite,
             "gap_satellite": gap_satellite,
             "step_traj": step_traj,
+            "formation": formation,
             "Ninterp": Ninterp,
         }
 
@@ -246,6 +260,7 @@ class TrajectoryPreprocessor:
             logger.info(f"  Filter enabled:    {filter_enabled}")
             logger.info(f"  Nbsatellite:       {nbsatellite}")
             logger.info(f"  Gap satellite:     {gap_satellite}")
+            logger.info(f"  Formation:         {formation}")
             logger.info(f"  Trajectory method: {self.trajectory_method}")
 
     # ========== DATA LOADING ==========
@@ -348,6 +363,7 @@ class TrajectoryPreprocessor:
             'Ninterp': Ninterp,
             'gap_satellite': gap_satellite,
             'nbsatellite': nbsatellite,
+            'formation': self.config['formation'],
             'step_traj': None,
             'trajectory_method': self.trajectory_method,
             'trajectory_func': self.trajectory_func,

@@ -400,41 +400,13 @@ class TrajectoryQuantitiesComputer:
                 if self.verbose:
                     logger.error(f"Failed to compute {quantity_name}: {e}")
 
-    def _get_9satellite_faces_with_sat0(self):
-        """
-        Generate 4 tetrahedral tuples per face of the cube with sat0 as reference.
-
-        For each face of the cube (6 faces), forms 4 combinations of 3 vertices,
-        defining tetrahedrons with sat_0 at the center.
-        This mirrors the approach used for flux divergence in trajectory_law.py.
-
-        Returns:
-        -------
-        list[tuple[int, int, int]] : 24 tetrahedral index tuples (i, j, k)
-        """
-        faces = [
-            [1, 2, 5, 6],
-            [3, 4, 7, 8],
-            [1, 3, 5, 7],
-            [2, 4, 6, 8],
-            [1, 2, 3, 4],
-            [5, 6, 7, 8],
-        ]
-        valid_tuples = []
-        for surface in faces:
-            for i in range(4):
-                t = tuple(surface[:i] + surface[i+1:])
-                valid_tuples.append(t)
-        return valid_tuples
-
     def _compute_gradient_9satellite(self, dic_quantities: dict, quantities: list):
         """
-        Compute gradients using face-based tetrahedrons with sat0 as reference.
+        Compute gradient/divergence quantities using all 9 satellites.
 
-        For each face of the cube, computes 4 gradients using sat_0 and 3 of
-        the 4 face vertices, then averages all 24 tetrahedron results and
-        stores the final gradient at sat_0.
-        Mirrors the divergence calculation in trajectory_law.py.
+        Delegates to the gradient quantity itself (which for the 9-satellite
+        cluster computes a second-order central first derivative along each
+        axis from the opposite-pair satellites) and stores the result at sat_0.
 
         Parameters:
         -----------
@@ -443,63 +415,22 @@ class TrajectoryQuantitiesComputer:
         quantities : list[str]
             Quantity names to compute (only GRADIENT_QUANTITIES entries are processed)
         """
-        satellite_offsets = self.traj_param.get('satellite_offsets', {})
-        if not satellite_offsets:
-            raise ValueError("Missing satellite_offsets in traj_param for nbsatellite=9")
-
-        tuples = self._get_9satellite_faces_with_sat0()
-        ref_offset = np.asarray(satellite_offsets['sat_0'])
-
-        tetra_setups = []
-        for (i, j, k) in tuples:
-            source_sat_names = ["sat_0", f"sat_{i}", f"sat_{j}", f"sat_{k}"]
-            dR1 = np.asarray(satellite_offsets[f'sat_{i}']) - ref_offset
-            dR2 = np.asarray(satellite_offsets[f'sat_{j}']) - ref_offset
-            dR3 = np.asarray(satellite_offsets[f'sat_{k}']) - ref_offset
-            tetra_setups.append((source_sat_names, dR1, dR2, dR3))
-
-        base_traj_param = dict(self.traj_param)
-        base_traj_param['nbsatellite'] = 4
-
         for quantity_name in quantities:
             if quantity_name not in self.GRADIENT_QUANTITIES:
                 continue
-
-            grad_results = {}
-
-            for source_sat_names, dR1, dR2, dR3 in tetra_setups:
-                tuple_dic_quant = {
-                    f"sat_{local_idx}": dic_quantities[source_sat_names[local_idx]]
-                    for local_idx in range(4)
-                }
-
-                tuple_traj_param = dict(base_traj_param)
-                tuple_traj_param['dR1'] = dR1
-                tuple_traj_param['dR2'] = dR2
-                tuple_traj_param['dR3'] = dR3
-
-                result = self._compute_quantity_vectorized(
-                    quantity_name, tuple_dic_quant, traj_param_override=tuple_traj_param,
-                )
-
+            try:
+                result = self._compute_quantity_vectorized(quantity_name, dic_quantities)
                 if isinstance(result, dict):
-                    for i, (key, value) in enumerate(result.items()):
-                        if key not in grad_results:
-                            grad_results[key] = []
-                        grad_results[key].append(value)
+                    dic_quantities['sat_0'].update(result)
                 else:
-                    if quantity_name not in grad_results:
-                        grad_results[quantity_name] = []
-                    grad_results[quantity_name].append(result)
-
-            for key, values in grad_results.items():
-                if key not in dic_quantities['sat_0']:
-                    dic_quantities['sat_0'][key] = np.mean(values, axis=0)
-                else:
-                    dic_quantities['sat_0'][key].update(np.mean(values, axis=0))
+                    dic_quantities['sat_0'][quantity_name] = result
+            except Exception as e:
+                if self.verbose:
+                    logger.error(f"Failed to compute {quantity_name}: {e}")
 
     def _compute_quantity_vectorized(self, quantity_name: str, dic_quant_sat: dict,
-                                     traj_param_override: dict = None):
+                                     traj_param_override: dict = None,
+                                     grid_param_override: dict = None):
         """Compute a single quantity via the QUANTITIES registry.
 
         Parameters:
@@ -509,6 +440,8 @@ class TrajectoryQuantitiesComputer:
             Single-satellite {var: array} or multi-satellite {sat: {var: array}}
         traj_param_override : dict, optional
             Temporary trajectory params (for 9-satellite subgroups)
+        grid_param_override : dict, optional
+            Temporary grid params (for 9-satellite subgroups)
 
         Returns:
         -------
@@ -516,9 +449,10 @@ class TrajectoryQuantitiesComputer:
         """
         mock_file = MockFile()
         traj_param = traj_param_override or self.traj_param
+        grid_param = grid_param_override or self.grid_param
         self.quantities_registry[quantity_name].create_datasets(
             mock_file, dic_quant_sat, self.dic_param,
-            traj=True, traj_param=traj_param
+            traj=True, traj_param=traj_param, grid_param=grid_param
         )
         if len(mock_file.data) == 1:
             return list(mock_file.data.values())[0]

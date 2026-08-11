@@ -81,6 +81,7 @@ dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
     laws=laws,
     physical_param=physical_param,
     traj_param=traj_param,
+    grid_param=grid_param,
     method=method,
     filename = 'result_traj/laws/'+name_output + '_' + trajectory_name + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
     verbose=True

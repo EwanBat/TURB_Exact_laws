@@ -154,8 +154,10 @@ class TrajectoryTermsIncrementalMixin:
         """
         Compute terms using incremental method for 9-satellite formation.
 
-        Flux and other terms use merged quantities from sat_0 and sat_i pairs.
-        Source terms are computed from sat_0 merged with itself.
+        Flux terms use merged quantities from sat_0 and sat_i pairs, and are
+        computed for every satellite position. Source and other gradient-dependent
+        terms are computed only for sat_0 (itself merged) since the exact-law
+        gradient is evaluated at a single precise point (sat_0).
 
         Parameters:
         -----------
@@ -181,6 +183,7 @@ class TrajectoryTermsIncrementalMixin:
         source_terms = [t for t in required_terms if t in self.SOURCE_TERMS]
         other_terms = [t for t in required_terms if t not in self.FLUX_TERMS and t not in self.SOURCE_TERMS]
 
+        # Flux terms: computed for every satellite position using the (sat_0, sat_i) tuple.
         for sat2 in self._sat_names:
             computed = []
             missing = []
@@ -193,7 +196,7 @@ class TrajectoryTermsIncrementalMixin:
                         dic_quantities[sat2][quantity]
                     ), axis=1)
 
-            for term_name in flux_terms + other_terms:
+            for term_name in flux_terms:
                 try:
                     term_obj = TERMS[term_name]
                     if filter_enabled:
@@ -214,27 +217,28 @@ class TrajectoryTermsIncrementalMixin:
                 for t in missing:
                     logger.warning(f"  [WARNING] Term {t} NOT computed for {sat2}")
 
-        if source_terms:
-            merged_quantities = {}
-            for quantity in dic_quantities['sat_0'].keys():
-                merged_quantities[quantity] = np.concatenate((
-                    dic_quantities['sat_0'][quantity],
-                    dic_quantities['sat_0'][quantity]
-                ), axis=1)
+        # Source terms: computed only for sat_0 (its own tuple) as they depend on the
+        # single precise gradient evaluated at sat_0.
+        for term_name in source_terms:
+            try:
+                merged_quantities = {}
+                for quantity in dic_quantities['sat_0'].keys():
+                    merged_quantities[quantity] = np.concatenate((
+                        dic_quantities['sat_0'][quantity],
+                        dic_quantities['sat_0'][quantity]
+                    ), axis=1)
 
-            for term_name in source_terms:
-                try:
-                    term_obj = TERMS[term_name]
-                    if filter_enabled:
-                        result['sat_0'][term_name] = term_obj.calc_filter(
-                            n_points, n_trajectories, fs, **merged_quantities)
-                    else:
-                        result['sat_0'][term_name] = term_obj.calc_incr_traj(
-                            n_points, n_trajectories, **merged_quantities)
-                    if self.verbose:
-                        logger.info(f"  [OK] Source term {term_name} computed from sat_0")
-                except Exception as e:
-                    if self.verbose:
-                        logger.error(f"  [ERROR] Failed source term {term_name} for sat_0: {e}")
+                term_obj = TERMS[term_name]
+                if filter_enabled:
+                    result['sat_0'][term_name] = term_obj.calc_filter(
+                        n_points, n_trajectories, fs, **merged_quantities)
+                else:
+                    result['sat_0'][term_name] = term_obj.calc_incr_traj(
+                        n_points, n_trajectories, **merged_quantities)
+                if self.verbose:
+                    logger.info(f"  [OK] Source term {term_name} computed from sat_0")
+            except Exception as e:
+                if self.verbose:
+                    logger.error(f"  [ERROR] Failed source term {term_name} for sat_0: {e}")
 
         return result

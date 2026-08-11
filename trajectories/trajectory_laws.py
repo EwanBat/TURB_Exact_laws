@@ -18,7 +18,7 @@ import logging
 import h5py
 
 from exact_laws.el_calc_mod.laws import LAWS
-from trajectories.derivation_satellite import divergence_1satellite, divergence_4satellite
+from trajectories.derivation_satellite import divergence_1satellite, divergence_4satellite, divergence_9satellite
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class TrajectoryLawsComputer:
     
     # ========== INITIALIZATION ==========
     
-    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None):
+    def __init__(self, verbose: bool = False, physical_param: dict = None, traj_param: dict = None, grid_param: dict = None):
         """
         Initialize the trajectory laws computer.
         
@@ -48,10 +48,13 @@ class TrajectoryLawsComputer:
             Physical parameters (can be set later)
         traj_param : dict, optional
             Trajectory parameters (can be set later)
+        grid_param : dict, optional
+            Grid parameters (can be set later)
         """
         self.verbose = verbose
         self.physical_param = physical_param or {}
         self.traj_param = traj_param or {}
+        self.grid_param = grid_param or {}
         self.nbsatellite = self.traj_param.get('nbsatellite', 1)
     
     # ========== PUBLIC METHODS ==========
@@ -279,44 +282,13 @@ class TrajectoryLawsComputer:
 
         return result, coeffs_sat_0
 
-    def _get_9satellite_tuples_with_sat0(self):
-        """
-        Generate 4 tetrahedral index tuples per face of the cube for 9-satellite geometry.
-
-        For each of the 6 cube faces, forms 4 combinations of 3 satellite indices,
-        defining tetrahedrons with sat_0 at the center. Produces 24 tuples total.
-
-        Returns:
-        -------
-        list[tuple[int, int, int]] : 24 tetrahedral index tuples (i, j, k)
-        """
-        satellite_offsets = self.traj_param.get('satellite_offsets', {})
-        if not satellite_offsets:
-            raise ValueError("Missing satellite_offsets in traj_param for nbsatellite=9")
-
-        faces = [
-            [1, 2, 5, 6],
-            [3, 4, 7, 8],
-            [1, 3, 5, 7],
-            [2, 4, 6, 8],
-            [1, 2, 3, 4],
-            [5, 6, 7, 8],
-        ]
-
-        valid_tuples = []
-        for surface in faces:
-            for i in range(4):
-                t = tuple(surface[:i] + surface[i+1:])
-                valid_tuples.append(t)
-        return valid_tuples
-
     def _apply_law_coefficients_9satellite(self, dic_terms: dict, law_obj, method: str = None):
         """
         Apply law coefficients to computed terms for 9-satellite cube configuration.
 
-        For divergence terms: averages over 24 tetrahedral sub-groups formed from
-        the 6 cube faces (incremental method) or passes through sat_0 (fourier).
-        Source and simple terms used directly from sat_0.
+        For divergence terms: computed at second order precision using the
+        axis-aligned satellite pairs (incremental method) or passed through sat_0
+        (fourier). Source and simple terms used directly from sat_0.
 
         Parameters:
         -----------
@@ -347,26 +319,9 @@ class TrajectoryLawsComputer:
             if term_name in dic_terms['sat_0']:
                 try:
                     if method == "incremental":
-                        tuples = self._get_9satellite_tuples_with_sat0()
-                        offsets = self.traj_param['satellite_offsets']
-                        div_results = []
-                        for (i, j, k) in tuples:
-                            dic_quant_sub = {
-                                'sat_0': dic_terms['sat_0'],
-                                'sat_1': dic_terms[f'sat_{i}'],
-                                'sat_2': dic_terms[f'sat_{j}'],
-                                'sat_3': dic_terms[f'sat_{k}'],
-                            }
-                            traj_param_sub = dict(self.traj_param)
-                            traj_param_sub['dR1'] = offsets[f'sat_{i}']
-                            traj_param_sub['dR2'] = offsets[f'sat_{j}']
-                            traj_param_sub['dR3'] = offsets[f'sat_{k}']
-                            div_results.append(divergence_4satellite(
-                                dic_quant_sub, term_name, traj_param_sub
-                            ))
-                        result[coeff_key] = np.mean(div_results, axis=0)
+                        result[coeff_key] = divergence_9satellite(dic_terms, term_name, self.traj_param, self.grid_param)
                         if self.verbose:
-                            logger.info(f"  [OK] Divergence {coeff_key} averaged over {len(div_results)} tetrahedrons")
+                            logger.info(f"  [OK] Divergence {coeff_key} computed at second order from satellite pairs")
                     elif method == "fourier":
                         result[coeff_key] = dic_terms['sat_0'][term_name]
                         if self.verbose:
@@ -472,7 +427,7 @@ class TrajectoryLawsComputer:
 
 # ========== BACKWARD COMPATIBILITY FUNCTIONS ==========
 
-def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_param=None,
+def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_param=None, grid_param=None,
                                         filename="laws_terms.h5",
                                         laws=None, method:str =None,
                                         verbose:bool=False):
@@ -487,6 +442,8 @@ def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_pa
         Physical parameters
     traj_param : dict, optional
         Trajectory parameters including 'nbsatellite'
+    grid_param : dict, optional
+        Grid parameters
     filename : str
         Output HDF5 file path
     laws : list[str], optional
@@ -504,5 +461,6 @@ def compute_laws_terms_with_coefficients(dic_terms, physical_param=None, traj_pa
     """
     computer = TrajectoryLawsComputer(verbose=verbose, 
                                      physical_param=physical_param,
-                                     traj_param=traj_param)
+                                     traj_param=traj_param,
+                                     grid_param=grid_param)
     return computer.compute_laws_terms(dic_terms, laws=laws, filename=filename, method=method)

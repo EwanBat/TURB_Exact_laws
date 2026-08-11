@@ -189,3 +189,116 @@ def divergence_4satellite(dic_quant, quantity_name, traj_param):
     
     reciprocal_volume = 1 / np.dot(dR1, np.cross(dR2, dR3))
     return divalpha * reciprocal_volume
+
+
+def gradient_9satellite(dic_quant, quantity_name, traj_param, grid_param):
+    """
+    Compute the first derivative of a term along a trajectory for 9 satellites.
+
+    Uses the cluster shape directly: the satellites lie along the known axes
+    (sat_1/2 along +-x, sat_3/4 along +-y, sat_5/6 along +-z), so each spatial
+    derivative is a second-order central difference between the opposite pair.
+
+    Parameters:
+    -----------
+    dic_quant : dict
+        Dictionary containing the term values for all 9 satellites
+    quantity_name : str
+        Name of the quantity for which to compute the gradient
+    traj_param : dict
+        Dictionary containing satellite_offsets (and, if nbsatellite=9)
+        used to derive the physical axis spacings
+    grid_param : dict
+        Dictionary containing grid parameters, including the grid spacing 'c'
+        
+    Returns:
+    --------
+    gradient_para : np.ndarray
+        3D array (n_dim=3, n_trajectories, n_points)
+    """
+    dx, dy, dz = traj_param['gap_satellite'] * np.asarray(grid_param['c'])
+
+    q0 = dic_quant['sat_0'][quantity_name]
+    q1 = dic_quant['sat_1'][quantity_name]
+    q2 = dic_quant['sat_2'][quantity_name]
+    q3 = dic_quant['sat_3'][quantity_name]
+    q4 = dic_quant['sat_4'][quantity_name]
+    q5 = dic_quant['sat_5'][quantity_name]
+    q6 = dic_quant['sat_6'][quantity_name]
+    q7 = dic_quant['sat_7'][quantity_name]
+    q8 = dic_quant['sat_8'][quantity_name]
+
+    if traj_param['formation'] == 'star':     
+        gradient_para = np.stack([
+            (q1 - q2) / (2*dx),   # d/dx
+            (q3 - q4) / (2*dy),   # d/dy
+            (q5 - q6) / (2*dz),   # d/dz
+        ])
+        return gradient_para
+
+    if traj_param['formation'] == 'cross':
+        gradient_para = np.stack([
+            (-q3 + 8*q0 -8*q2 + q1) / (12*dx),   # d/dx
+            (-q6 + 8*q0 -8*q5 + q4) / (12*dy),   # d/dy
+            (q7 - q8) / (2*dz),   # d/dz
+        ])
+        return gradient_para
+
+    raise ValueError(f"Unknown formation {traj_param['formation']} for 9 satellites. Expected 'star' or 'cross'.")
+
+def divergence_9satellite(dic_quant, quantity_name, traj_param, grid_param):
+    """
+    Compute the divergence-like scalar of a term along a trajectory for 9 satellites.
+
+    Applies the same second-order central difference per axis and sums the
+    diagonal contribution to build a single scalar per (trajectory, point).
+
+    Parameters:
+    -----------
+    dic_quant : dict
+        Dictionary containing the term values for all 9 satellites
+    quantity_name : str
+        Name of the quantity for which to compute the divergence
+    traj_param : dict
+        Dictionary containing satellite_offsets used to derive axis spacings
+    grid_param : dict
+        Dictionary containing grid parameters, including the grid spacing 'c'
+
+    Returns:
+    --------
+    divergence_para : np.ndarray
+        2D array (n_trajectories, n_points)
+    """
+    dx, dy, dz = traj_param['gap_satellite'] * np.asarray(grid_param['c'])
+
+    if traj_param['formation'] == 'star':
+        q1 = dic_quant['sat_1'][quantity_name][0, :, :]
+        q2 = dic_quant['sat_2'][quantity_name][0, :, :]
+        q3 = dic_quant['sat_3'][quantity_name][1, :, :]
+        q4 = dic_quant['sat_4'][quantity_name][1, :, :]
+        q5 = dic_quant['sat_5'][quantity_name][2, :, :]
+        q6 = dic_quant['sat_6'][quantity_name][2, :, :]
+
+        divergence_para = (q1 - q2) / (2*dx) + (q3 - q4) / (2*dy) + (q5 - q6) / (2*dz)
+        return divergence_para
+
+    if traj_param['formation'] == 'cross':
+        q0x = dic_quant['sat_0'][quantity_name][0, :, :]
+        q0y = dic_quant['sat_0'][quantity_name][1, :, :]
+        q1 = dic_quant['sat_1'][quantity_name][0, :, :]
+        q2 = dic_quant['sat_2'][quantity_name][0, :, :]
+        q3 = dic_quant['sat_3'][quantity_name][0, :, :]
+        q4 = dic_quant['sat_4'][quantity_name][1, :, :]
+        q5 = dic_quant['sat_5'][quantity_name][1, :, :]
+        q6 = dic_quant['sat_6'][quantity_name][1, :, :]
+        q7 = dic_quant['sat_7'][quantity_name][2, :, :]
+        q8 = dic_quant['sat_8'][quantity_name][2, :, :]
+
+        divergence_para = (
+            (-q3 + 8*q0x - 8*q2 + q1) / (12*dx) +
+            (-q6 + 8*q0y - 8*q5 + q4) / (12*dy) +
+            (q7 - q8) / (2*dz)
+        )
+        return divergence_para
+
+    raise ValueError(f"Unknown formation {traj_param['formation']} for 9 satellites. Expected 'star' or 'cross'.")

@@ -230,7 +230,7 @@ def trajectory_linear_xy(t: np.ndarray, x_pos: int, y_pos: int, z_pos: int, N: n
 def _get_satellite_offsets(nbsatellite: int,
                            gap_satellite: float,
                            grid_param: dict,
-                           trajectory_method: str | None = None) -> dict:
+                           formation: str) -> dict:
     """Build the satellite offsets used to sample the mesh around the trajectory."""
     c = np.asarray(grid_param['c'])
     satellite_offsets = {'sat_0': np.zeros(3, dtype=float)}
@@ -246,16 +246,31 @@ def _get_satellite_offsets(nbsatellite: int,
         })
         return satellite_offsets
 
-    if nbsatellite == 9:
-        sat_index = 1
-        for dx in (-1, 1):
-            for dy in (-1, 1):
-                for dz in (-1, 1):
-                    offset_index = np.array([dx, dy, dz], dtype=float) * gap_satellite
-                    satellite_offsets[f'sat_{sat_index}'] = offset_index * c
-                    sat_index += 1
+    if nbsatellite == 9 and formation == 'star':
+        satellite_offsets.update({
+            'sat_1': np.array([gap_satellite, 0, 0], dtype=float) * c,
+            'sat_2': np.array([-gap_satellite, 0, 0], dtype=float) * c,
+            'sat_3': np.array([0, gap_satellite, 0], dtype=float) * c,
+            'sat_4': np.array([0, -gap_satellite, 0], dtype=float) * c,
+            'sat_5': np.array([0, 0, gap_satellite], dtype=float) * c,
+            'sat_6': np.array([0, 0, -gap_satellite], dtype=float) * c,
+            'sat_7': np.array([gap_satellite, gap_satellite, gap_satellite], dtype=float) * c,
+            'sat_8': np.array([-gap_satellite, -gap_satellite, -gap_satellite], dtype=float) * c,
+        })
         return satellite_offsets
 
+    if nbsatellite == 9 and formation == 'cross':
+        satellite_offsets.update({
+                    'sat_1': np.array([-2*gap_satellite, 0, 0], dtype=float) * c,
+                    'sat_2': np.array([-gap_satellite, 0, 0], dtype=float) * c,
+                    'sat_3': np.array([0, gap_satellite, 0], dtype=float) * c,
+                    'sat_4': np.array([0, -2*gap_satellite, 0], dtype=float) * c,
+                    'sat_5': np.array([0, -gap_satellite, 0], dtype=float) * c,
+                    'sat_6': np.array([0, gap_satellite, 0], dtype=float) * c,
+                    'sat_7': np.array([0, 0, -gap_satellite], dtype=float) * c,
+                    'sat_8': np.array([0, 0, gap_satellite], dtype=float) * c,
+                })
+        return satellite_offsets
     raise ValueError(f"nbsatellite must be 1, 4 or 9, got {nbsatellite}")
 
 # ====================== Trajectory generation and data extraction ======================
@@ -500,7 +515,9 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
     trajectory : np.ndarray
         Central trajectory (n_points, 3) in indices
     traj_param : dict
-        Number of satellites (1, 4 or 9) and gap between satellites (if needed)
+        Number of satellites (1, 4 or 9) and gap between satellites (if needed).
+        For 9 satellites the offsets are: sat_0 center, sat_1/2 along +-x,
+        sat_3/4 along +-y, sat_5/6 along +-z, sat_7/8 at (+++) and (---).
     grid_param : dict
         Grid parameters (N, L, c) for physical coordinate conversion
     Returns:
@@ -518,7 +535,7 @@ def extract_quantities_along_trajectory(dic_datas: dict, trajectory: np.ndarray,
             nbsatellite,
             traj_param.get('gap_satellite', 1),
             grid_param,
-            traj_param.get('trajectory_method')
+            traj_param.get('formation', None)
         )
 
     trajectory_data = {sat_name: {} for sat_name in satellite_offsets.keys()}
@@ -565,7 +582,9 @@ def combine_multiple_trajectories(trajectory_func: Callable,
         - trajectory_kwargs_list: list of parameter dicts for each trajectory
         - Ninterp: interpolation factor
         - gap_satellite: separation between satellites (if nbsatellite > 1)
-        - nbsatellite: number of satellites (1, 4 or 9)
+        - nbsatellite: number of satellites (1, 4 or 9). For 9, sat_0 is the
+          center, sat_1/2 along +-x, sat_3/4 along +-y, sat_5/6 along +-z,
+          sat_7/8 at (+++) and (---)
     grid_param : dict
         Grid parameters (N, L, c) defining the computational domain
     verbose : bool
@@ -584,6 +603,7 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     Ninterp = traj_param.get('Ninterp', 1)
     gap_satellite = traj_param.get('gap_satellite', 1)
     nbsatellite = traj_param.get('nbsatellite', 1)
+    formation = traj_param.get('formation', None)
 
     if verbose:
         logging.info(f"  Processing {n_trajectories} trajectory/trajectories...")
@@ -606,7 +626,7 @@ def combine_multiple_trajectories(trajectory_func: Callable,
     # Get dimensions from first trajectory
     n_points = len(t)
 
-    satellite_offsets = _get_satellite_offsets(nbsatellite, gap_satellite, grid_param, traj_param.get('trajectory_method'))
+    satellite_offsets = _get_satellite_offsets(nbsatellite, gap_satellite, grid_param, formation)
     traj_param['satellite_offsets'] = satellite_offsets
 
     if nbsatellite == 4:
