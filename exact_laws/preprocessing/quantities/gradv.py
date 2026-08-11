@@ -2,14 +2,14 @@ import numpy as np
 import numexpr as ne
 
 from ...mathematical_tools import derivation
-from trajectories.derivation_satellite import gradient_1satellite, gradient_4satellite
+from trajectories.derivation_satellite import gradient_1satellite, gradient_4satellite, gradient_9satellite
 
 class GradV:
     def __init__(self, incompressible=False):
         self.name = 'I' * incompressible + 'gradv'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None, grid_param: dict = None):
         inc = 'I' * self.incompressible
         if traj:
             for axisv in ('x', 'y', 'z'):
@@ -29,6 +29,19 @@ class GradV:
                         dic_quant,
                         f"{inc}v{axisv}",
                         traj_param,
+                    )
+                    for i,axisd in enumerate(('x', 'y', 'z')):
+                        ds_name = f"{inc}d{axisd}v{axisv}"
+                        file.create_dataset(
+                            ds_name,
+                            data=gradv[i]
+                        )
+                elif traj_param['nbsatellite'] == 9:
+                    gradv = gradient_9satellite(
+                        dic_quant,
+                        f"{inc}v{axisv}",
+                        traj_param,
+                        grid_param
                     )
                     for i,axisd in enumerate(('x', 'y', 'z')):
                         ds_name = f"{inc}d{axisd}v{axisv}"

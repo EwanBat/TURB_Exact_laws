@@ -8,7 +8,7 @@ class Vnorm:
         self.name = 'I' * incompressible + 'vnorm'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None, grid_param: dict = None):
         inc = 'I' * self.incompressible
         v = np.sqrt(dic_quant[f"{inc}vx"]*dic_quant[f"{inc}vx"] + dic_quant[f"{inc}vy"]*dic_quant[f"{inc}vy"] + dic_quant[f"{inc}vz"]*dic_quant[f"{inc}vz"])
         

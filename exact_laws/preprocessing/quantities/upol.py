@@ -7,7 +7,7 @@ class UPol:
         self.name = 'I' * incompressible + 'upol'
         self.incompressible = incompressible
 
-    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None):
+    def create_datasets(self, file, dic_quant, dic_param, traj: bool = False, traj_param: dict = None, grid_param: dict = None):
         if self.incompressible:
             raise NotImplementedError("")
         
