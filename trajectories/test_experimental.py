@@ -2,10 +2,10 @@
 import numpy as np
 import logging
 from datetime import datetime
-from trajectories.trajectory_experimental import preprocess_experimental_trajectory_from_ini, param_to_txt
-from trajectories.trajectory_quantities import extract_and_compute_trajectory_quantities
-from trajectories.trajectory_terms import compute_all_terms_for_laws
-from trajectories.trajectory_laws import compute_laws_terms_with_coefficients
+from trajectories.trajectory_experimental import ExperimentalTrajectoryDataLoader, param_to_txt
+from trajectories.quantity_components import TrajectoryQuantitiesComputer
+from trajectories.terms_components import TrajectoryTermsComputer
+from trajectories.laws_components import TrajectoryLawsComputer
 import time
 
 time_start = time.time()
@@ -39,14 +39,15 @@ rho = [np.random.rand(10000) for _ in range(4)]
 ppar = [np.random.rand(10000) for _ in range(4)]
 pperp = [np.random.rand(10000) for _ in range(4)]
 
-config = preprocess_experimental_trajectory_from_ini(
-    ini_file=config_file,
+loader = ExperimentalTrajectoryDataLoader(verbose=True)
+loader.load_config(config_file)
+config = loader.run(
     x=x, y=y, z=z,
     bx=bx, by=by, bz=bz,
     vx=vx, vy=vy, vz=vz,
     rho=rho, ppar=ppar, pperp=pperp,
-    verbose=True
 )
+del loader
 
 # Extract results
 dic_datas = config['dic_datas']  # 1D extracted data
@@ -64,68 +65,87 @@ nbsatellite = traj_param['nbsatellite']
 
 param_to_txt(grid_param, traj_param, physical_param, filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_parameters.txt")
 
-dic_quantities = extract_and_compute_trajectory_quantities(
-    dic_datas, 
+quantities_computer = TrajectoryQuantitiesComputer(
+    verbose=True,
     grid_param=grid_param,
     traj_param=traj_param,
     physical_param=physical_param,
+)
+dic_quantities = quantities_computer.extract_and_compute(
+    dic_datas,
     laws=laws,
     terms=terms,
     quantities=quantities,
     method=method,
     filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_quantities.h5",
-    verbose=True,
 )
+del quantities_computer
+
+run_params = {'method': method, 'max_workers': max_workers}
 
 # %% Compute quantities along trajectory
 if traj_param['nbsatellite'] == 1:
 
-    dic_terms = compute_all_terms_for_laws(
-        dic_quantities = dic_quantities, 
-        laws = laws,
-        physical_param = physical_param,
-        traj_param = traj_param,
-        method = method,
-        max_workers = max_workers,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
-        verbose=True
-    )
-
-    dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
-        dic_terms=dic_terms,
-        laws=laws,
+    terms_computer = TrajectoryTermsComputer(
+        verbose=True,
         physical_param=physical_param,
         traj_param=traj_param,
-        method=method,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
-        verbose=True
+        grid_param=grid_param,
+        run_params=run_params,
     )
+    dic_terms = terms_computer.compute_all_terms_for_laws(
+        dic_quantities,
+        laws,
+        filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+    )
+    del terms_computer
+
+    laws_computer = TrajectoryLawsComputer(
+        verbose=True,
+        physical_param=physical_param,
+        traj_param=traj_param,
+        grid_param=grid_param,
+    )
+    dic_law_terms, dic_law_coeff = laws_computer.compute_laws_terms(
+        dic_terms,
+        laws=laws,
+        method=method,
+        filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+    )
+    del laws_computer
 
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")
 
 elif traj_param['nbsatellite'] == 4:
 
-    dic_terms = compute_all_terms_for_laws(
-        dic_quantities = dic_quantities, 
-        laws = laws,
-        physical_param = physical_param,
-        traj_param = traj_param,
-        method = method,
-        max_workers = max_workers,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
-        verbose=True
-    )
-
-    dic_law_terms, dic_law_coeff = compute_laws_terms_with_coefficients(
-        dic_terms=dic_terms,
-        laws=laws,
+    terms_computer = TrajectoryTermsComputer(
+        verbose=True,
         physical_param=physical_param,
         traj_param=traj_param,
-        method=method,
-        filename = 'result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
-        verbose=True
+        grid_param=grid_param,
+        run_params=run_params,
     )
+    dic_terms = terms_computer.compute_all_terms_for_laws(
+        dic_quantities,
+        laws,
+        filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_terms.h5",
+    )
+    del terms_computer
+
+    laws_computer = TrajectoryLawsComputer(
+        verbose=True,
+        physical_param=physical_param,
+        traj_param=traj_param,
+        grid_param=grid_param,
+    )
+    dic_law_terms, dic_law_coeff = laws_computer.compute_laws_terms(
+        dic_terms,
+        laws=laws,
+        method=method,
+        filename='result_traj/'+config['name_output'] + '_' + config['trajectory_name'] + "_" + method + '_sat' + str(nbsatellite) + "_laws.h5",
+    )
+    del laws_computer
     
     time_end = time.time()
     logging.info(f"Time taken to compute laws terms: {time_end - time_start:.2f} seconds")

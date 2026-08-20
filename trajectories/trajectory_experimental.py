@@ -119,6 +119,8 @@ class ExperimentalTrajectoryDataLoader:
         self.trajectories = {}
         self.traj_param = {}
         self.physical_param = {}
+        self.dic_datas = {}
+        self.config = None
         
     # ========== PUBLIC METHODS ==========
     
@@ -254,9 +256,171 @@ class ExperimentalTrajectoryDataLoader:
         if self.verbose:
             logging.info(f"  [OK] Derived quantities computed for {len(self.dic_datas)} satellites")
             
+    # ========== CONFIGURATION ==========
+
+    def load_config(self, config_file: str):
+        """
+        Load all parameters from a .ini configuration file.
+
+        Parameters:
+        -----------
+        config_file : str
+            Path to the configuration .ini file (ex: "trajectory_experimental.ini")
+            Must contain [RUN_PARAMS], [OUTPUT_DATA], [PHYSICAL_PARAMS] and [INPUT_DATA] sections.
+        """
+        ini_path = Path(config_file)
+        if not ini_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_file}")
+
+        if self.verbose:
+            logging.info(f"INI file found: {ini_path.absolute()}")
+
+        config = configparser.ConfigParser()
+        config.read(config_file)
+
+        self.config = {
+            "max_workers": config["INPUT_DATA"].getint("max_workers", 2),
+            "nbsatellite": config["RUN_PARAMS"].getint("nbsatellite", None),
+            "compute_tangent": config["RUN_PARAMS"].getboolean("compute_tangent", True),
+            "laws": eval(config["OUTPUT_DATA"].get("laws", "[]")),
+            "terms": eval(config["OUTPUT_DATA"].get("terms", "[]")),
+            "quantities": eval(config["OUTPUT_DATA"].get("quantities", "[]")),
+            "name_output": config["OUTPUT_DATA"].get("name_output", None),
+            "method": config["RUN_PARAMS"].get("method", "fourier"),
+            "Ninterp": config["RUN_PARAMS"].getint("Ninterp", 1),
+        }
+
+        if "PHYSICAL_PARAMS" in config:
+            for key in config["PHYSICAL_PARAMS"].keys():
+                try:
+                    self.physical_param[key] = float(eval(config["PHYSICAL_PARAMS"][key]))
+                except:
+                    self.physical_param[key] = config["PHYSICAL_PARAMS"][key]
+
+        if self.verbose:
+            logging.info(f"  Nbsatellite:       {self.config['nbsatellite']}")
+            logging.info(f"  Laws:              {self.config['laws']}")
+            logging.info(f"  Method:            {self.config['method']}")
+            logging.info(f"  Compute tangents:  {self.config['compute_tangent']}")
+
+    # ========== MAIN WORKFLOW ==========
+
+    def run(self,
+            x: List[np.ndarray] = None, y: List[np.ndarray] = None, z: List[np.ndarray] = None,
+            bx: List[np.ndarray] = None, by: List[np.ndarray] = None, bz: List[np.ndarray] = None,
+            vx: List[np.ndarray] = None, vy: List[np.ndarray] = None, vz: List[np.ndarray] = None,
+            rho: List[np.ndarray] = None, ppar: List[np.ndarray] = None, pperp: List[np.ndarray] = None) -> Dict:
+        """
+        Execute the full experimental preprocessing workflow.
+
+        Loads the provided satellite data arrays, computes derived quantities
+        (tangents, trajectory length, relative positions) and structures the
+        trajectory/physical parameters for downstream computation.
+
+        Parameters:
+        -----------
+        x, y, z : List[np.ndarray]
+            Position arrays, one per satellite. Shape: (n_points,)
+        bx, by, bz : List[np.ndarray]
+            Magnetic field arrays, one per satellite. Shape: (n_points,)
+        vx, vy, vz : List[np.ndarray]
+            Velocity arrays, one per satellite. Shape: (n_points,)
+        rho : List[np.ndarray]
+            Density arrays, one per satellite. Shape: (n_points,)
+        ppar, pperp : List[np.ndarray]
+            Parallel and perpendicular pressure arrays, one per satellite. Shape: (n_points,)
+
+        Returns:
+        -------
+        dict : Processing results with keys:
+            - 'dic_datas': {sat_0: {x, y, z, bx, by, bz, vx, vy, vz, rho, ppar, pperp}, ...}
+            - 'grid_param': Placeholder for compatibility
+            - 'traj_param': {nbsatellite, n_points, tangents_list, ltraj_list, dR1, dR2, dR3, ...}
+            - 'physical_param': {meanppar, meanpperp, rho_mean, ...}
+            - 'laws', 'terms', 'quantities': From INI [OUTPUT_DATA]
+            - 'method': Interpolation method (from INI)
+            - 'name_output': Output prefix
+            - 'max_workers': Number of parallel workers
+
+        Raises:
+        -------
+        ValueError : If nbsatellite not 1 or 4
+        """
+        if self.config is None:
+            raise RuntimeError("Configuration not loaded. Call load_config() before run().")
+
+        nbsatellite = self.config["nbsatellite"]
+
+        self.load_datas_dict(
+            x=x, y=y, z=z, bx=bx, by=by, bz=bz,
+            vx=vx, vy=vy, vz=vz, rho=rho, ppar=ppar, pperp=pperp,
+            nbsatellite=nbsatellite,
+        )
+        self.compute_derived_quantities(compute_tangent=self.config["compute_tangent"])
+
+        # Structure trajectory parameters (following preprocess_components format)
+        first_sat = list(self.dic_datas.keys())[0] if self.dic_datas else 'sat_0'
+        n_points = self.dic_datas[first_sat][list(self.dic_datas[first_sat].keys())[0]].shape[1]
+
+        self.traj_param.update({
+            'nbsatellite': nbsatellite,
+            'Ninterp': self.config["Ninterp"],
+            'n_trajectories': 1,  # One trajectory per satellite
+            'n_points': n_points,
+            'trajectory_kwargs_list': [{}],  # No kwargs for experimental data
+            'trajectory_method': 'experimental',
+            'source': 'experimental_satellite_measurements'
+        })
+
+        self._compute_stats()
+
+        if self.verbose:
+            logging.info("\n" + "-"*70)
+            logging.info("DATA SUMMARY")
+            logging.info(f"  Number of points per satellite: {n_points}")
+            logging.info(f"  Number of satellites: {len(self.dic_datas)}")
+            for sat_name, sat_data in self.dic_datas.items():
+                logging.info(f"    {sat_name}: {len(sat_data)} fields")
+
+        return {
+            'laws': self.config["laws"],
+            'terms': self.config["terms"],
+            'quantities': self.config["quantities"],
+            'dic_datas': self.dic_datas,
+            'method': self.config["method"],
+            'grid_param': self.grid_param,
+            'traj_param': self.traj_param,
+            'physical_param': self.physical_param,
+            'trajectory_name': 'experimental',
+            'name_output': self.config["name_output"],
+            'max_workers': self.config["max_workers"]
+        }
+
     # ========== PRIVATE METHODS ==========
     
     
+    def _compute_stats(self):
+        """Compute mean pressure and density statistics from the loaded data."""
+        first_sat = list(self.dic_datas.keys())[0] if self.dic_datas else 'sat_0'
+
+        if 'ppar' in self.dic_datas.get(first_sat, {}):
+            self.physical_param["meanppar"] = {
+                sat: [np.mean(self.dic_datas[sat]['ppar'])]
+                for sat in self.dic_datas.keys()
+            }
+
+        if 'pperp' in self.dic_datas.get(first_sat, {}):
+            self.physical_param["meanpperp"] = {
+                sat: [np.mean(self.dic_datas[sat]['pperp'])]
+                for sat in self.dic_datas.keys()
+            }
+
+        if 'rho' in self.dic_datas.get(first_sat, {}):
+            self.physical_param["rho_mean"] = {
+                sat: [np.mean(self.dic_datas[sat]['rho'])]
+                for sat in self.dic_datas.keys()
+            }
+
     def _process_satellite_data(self, x: List[np.ndarray], y: List[np.ndarray], z: List[np.ndarray],
                                 bx: List[np.ndarray], by: List[np.ndarray], bz: List[np.ndarray],
                                 vx: List[np.ndarray], vy: List[np.ndarray], vz: List[np.ndarray],
@@ -331,154 +495,3 @@ class ExperimentalTrajectoryDataLoader:
 
         
         return dic_datas
-
-# ========== CONVENIENCE FUNCTIONS ==========
-
-def preprocess_experimental_trajectory_from_ini(ini_file: str,
-                                                x: List[np.ndarray], y: List[np.ndarray], z: List[np.ndarray],
-                                                bx: List[np.ndarray], by: List[np.ndarray], bz: List[np.ndarray],
-                                                vx: List[np.ndarray], vy: List[np.ndarray], vz: List[np.ndarray],
-                                                rho: List[np.ndarray], ppar: List[np.ndarray], pperp: List[np.ndarray],
-                                                verbose: bool = True) -> Dict:
-    """
-    Main entry point: Load experimental trajectory from numpy arrays via INI config.
-    Seamlessly integrates with trajectory_preprocess pipeline.
-    
-    Parameters:
-    -----------
-    ini_file : str
-        Path to trajectory_experimental.ini configuration file.
-        Must contain [RUN_PARAMS], [OUTPUT_DATA], [PHYSICAL_PARAMS], [INPUT_DATA] sections.
-    x, y, z, bx, by, bz, vx, vy, vz, rho, ppar, pperp : List[np.ndarray]
-        Satellite data arrays (length = nbsatellite from INI). Shape: (n_points,)
-    verbose : bool
-        Enable logging to file with timestamp
-    
-    Returns:
-    -------
-    dict : Processing results with keys:
-        - 'dic_datas': {sat_0: {x, y, z, bx, by, bz, vx, vy, vz, rho, ppar, pperp}, ...}
-        - 'grid_param': Placeholder for compatibility
-        - 'traj_param': {nbsatellite, n_points, tangents_list, ltraj_list, dR1, dR2, dR3, ...}
-        - 'physical_param': {meanppar, meanpperp, rho_mean, ...}
-        - 'laws', 'terms', 'quantities': From INI [OUTPUT_DATA]
-        - 'method': Interpolation method (from INI)
-        - 'name_output': Output prefix
-        - 'max_workers': Number of parallel workers
-    
-    Raises:
-    -------
-    FileNotFoundError : If ini_file not found
-    ValueError : If nbsatellite not 1 or 4
-    ConfigParser error : If INI format invalid
-    """
-    
-    setup_logging(Path(ini_file).stem)
-    
-    if verbose:
-        logging.info("\n" + "="*70)
-        logging.info(f"PREPROCESSING EXPERIMENTAL TRAJECTORY FROM {ini_file}")
-    
-    # Check file exists
-    ini_path = Path(ini_file)
-    if not ini_path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {ini_file}")
-    
-    if verbose:
-        logging.info(f"INI file found: {ini_path.absolute()}")
-    
-    # Load configuration
-    config = configparser.ConfigParser()
-    config.read(ini_file)
-    
-    # Extract configuration sections
-    max_workers = config["INPUT_DATA"].getint("max_workers", 2)
-    nbsatellite = config["RUN_PARAMS"].getint("nbsatellite", None)
-    compute_tangent = config["RUN_PARAMS"].getboolean("compute_tangent", True)
-    
-    laws = eval(config["OUTPUT_DATA"].get("laws", "[]"))
-    terms = eval(config["OUTPUT_DATA"].get("terms", "[]"))
-    quantities = eval(config["OUTPUT_DATA"].get("quantities", "[]"))
-    name_output = config["OUTPUT_DATA"].get("name_output", None)
-    
-    physical_param = {}
-    if "PHYSICAL_PARAMS" in config:
-        for key in config["PHYSICAL_PARAMS"].keys():
-            try:
-                physical_param[key] = float(eval(config["PHYSICAL_PARAMS"][key]))
-            except:
-                physical_param[key] = config["PHYSICAL_PARAMS"][key]
-    
-    method = config["RUN_PARAMS"].get("method", "fourier")
-    Ninterp = config["RUN_PARAMS"].getint("Ninterp", 1)
-    
-    if verbose:
-        logging.info(f"\n  Nbsatellite:       {nbsatellite}")
-        logging.info(f"  Laws:              {laws}")
-        logging.info(f"  Method:            {method}")
-        logging.info(f"  Compute tangents:  {compute_tangent}")
-    
-    # Load ODS data
-    try:
-        loader = ExperimentalTrajectoryDataLoader(verbose=verbose)
-        loader.load_datas_dict(x=x, y=y, z=z, bx=bx, by=by, bz=bz, vx=vx, vy=vy, vz=vz, rho=rho, ppar=ppar, pperp=pperp, nbsatellite=nbsatellite)
-        loader.compute_derived_quantities(compute_tangent=compute_tangent)
-    
-    except Exception as e:
-        logging.error(f"Error loading experimental data: {e}")
-        raise
-        
-    # Structure trajectory parameters (following tools_trajectory_preprocessing format)
-    first_sat = list(loader.dic_datas.keys())[0] if loader.dic_datas else 'sat_0'
-    n_points = loader.dic_datas[first_sat][list(loader.dic_datas[first_sat].keys())[0]].shape[1]
-    
-    loader.traj_param.update({
-        'nbsatellite': nbsatellite,
-        'Ninterp': Ninterp,
-        'n_trajectories': 1,  # One trajectory per satellite
-        'n_points': n_points,
-        'trajectory_kwargs_list': [{}],  # No kwargs for experimental data
-        'trajectory_method': 'experimental',
-        'source': 'experimental_satellite_measurements'
-    })
-    
-    # Compute statistics from data (for compatibility)
-    if 'ppar' in loader.dic_datas.get(first_sat, {}):
-        loader.physical_param["meanppar"] = {
-            sat: [np.mean(loader.dic_datas[sat]['ppar'])]
-            for sat in loader.dic_datas.keys()
-        }
-    
-    if 'pperp' in loader.dic_datas.get(first_sat, {}):
-        loader.physical_param["meanpperp"] = {
-            sat: [np.mean(loader.dic_datas[sat]['pperp'])]
-            for sat in loader.dic_datas.keys()
-        }
-    
-    if 'rho' in loader.dic_datas.get(first_sat, {}):
-        loader.physical_param["rho_mean"] = {
-            sat: [np.mean(loader.dic_datas[sat]['rho'])]
-            for sat in loader.dic_datas.keys()
-        }
-    
-    if verbose:
-        logging.info(f"\n" + "-"*70)
-        logging.info("DATA SUMMARY")
-        logging.info(f"  Number of points per satellite: {n_points}")
-        logging.info(f"  Number of satellites: {len(loader.dic_datas)}")
-        for sat_name, sat_data in loader.dic_datas.items():
-            logging.info(f"    {sat_name}: {len(sat_data)} fields")
-    
-    return {
-        'laws': laws,
-        'terms': terms,
-        'quantities': quantities,
-        'dic_datas': loader.dic_datas,
-        'method': method,
-        'grid_param': loader.grid_param,
-        'traj_param': loader.traj_param,
-        'physical_param': loader.physical_param,
-        'trajectory_name': 'experimental',
-        'name_output': name_output,
-        'max_workers': max_workers
-    }

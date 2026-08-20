@@ -1,14 +1,16 @@
 """
-Preprocessing module for satellite trajectories.
+Preprocessing orchestration for satellite trajectories.
 Encapsulates loading OCA data and retrieving required quantities.
 Support for custom trajectories - simple indexing in the cube.
+
+The geometric trajectory helpers live in geometry.py and the trajectory
+path definitions in trajectories.py.
 """
 
 import logging
 import numpy as np
 import h5py
 import configparser
-from pathlib import Path
 from datetime import datetime
 import json
 
@@ -17,7 +19,7 @@ from exact_laws.preprocessing.process_on_oca_files import (
     extract_simu_param_from_OCA_file
 )
 
-from trajectories.tools_trajectory_preprocessing import (
+from trajectories.preprocess_components.trajectories import (
     trajectory_linear_x,
     trajectory_linear_minus_x,
     trajectory_linear_y,
@@ -25,12 +27,12 @@ from trajectories.tools_trajectory_preprocessing import (
     trajectory_linear_z,
     trajectory_linear_minus_z,
     trajectory_linear_xy,
-    combine_multiple_trajectories,
     generate_all_trajectory_kwargs_linear_x,
     generate_all_trajectory_kwargs_linear_y,
     generate_all_trajectory_kwargs_linear_z,
     generate_all_trajectory_kwargs_linear_xy,
 )
+from trajectories.preprocess_components.geometry import combine_multiple_trajectories
 
 logger = logging.getLogger(__name__)
 
@@ -465,47 +467,3 @@ class TrajectoryPreprocessor:
             'trajectory_name': self.trajectory_func.__name__.split('_', 1)[-1],
             'name_output': self.name_output,
         }
-
-
-# ========== CONVENIENCE FUNCTION ==========
-
-def preprocess_trajectory_from_ini(ini_file: str, input_folder: str = "", verbose: bool = True):
-    """Load configuration from an INI file and preprocess along trajectories.
-
-    Convenience wrapper around TrajectoryPreprocessor.
-
-    Parameters:
-    -----------
-    ini_file : str
-        Path to the configuration .ini file (ex: "traj_satellite.ini")
-    input_folder : str
-        Path to folder containing OCA data (can be overridden by INI)
-    verbose : bool
-        Display detailed information
-
-    Returns:
-    -------
-    dict : Results containing configuration, data, parameters and trajectories
-    """
-    setup_logging(Path(ini_file).stem)
-
-    ini_path = Path(ini_file)
-    if not ini_path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {ini_file}")
-
-    if verbose:
-        logger.info(f"INI file found: {ini_path.absolute()}")
-
-    preprocessor = TrajectoryPreprocessor(verbose=verbose)
-    preprocessor.load_config(ini_file, input_folder)
-
-    if preprocessor.config["nbsatellite"] not in TrajectoryPreprocessor.SUPPORTED_NBSATELLITE:
-        raise ValueError(
-            f"Unsupported nbsatellite value: {preprocessor.config['nbsatellite']}. "
-            f"Expected {TrajectoryPreprocessor.SUPPORTED_NBSATELLITE}."
-        )
-
-    preprocessor.load_oca_data()
-    result = preprocessor.run()
-
-    return result

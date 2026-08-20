@@ -8,7 +8,7 @@ import h5py
 from exact_laws.el_calc_mod.laws import LAWS
 from exact_laws.el_calc_mod.terms import TERMS
 
-logger = logging.getLogger('trajectories.trajectory_terms')
+logger = logging.getLogger('trajectories.terms_components')
 
 
 class TrajectoryTermsComputerBase:
