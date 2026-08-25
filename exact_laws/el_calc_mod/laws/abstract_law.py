@@ -9,11 +9,11 @@ class AbstractLaw:
     def terms_and_coeffs(self, *args, **kwargs) -> Tuple[List[str], Dict[str,float]]:
         raise NotImplementedError("You have to reimplement this method")
     
-    def list_variables(self,terms):
+    def list_variables(self,terms, nbsatellite: int = 1, method: str = None) -> List[str]:
         variables = []
         for term in terms:
-            variables += TERMS[term].variables()
+            variables += TERMS[term].variables(nbsatellite=nbsatellite, method=method)
         return list(set(variables))
 
-    def variables(self) -> List[str]:
+    def variables(self, nbsatellite: int = 1, method: str = None) -> List[str]:
         raise NotImplementedError("You have to reimplement this method") 

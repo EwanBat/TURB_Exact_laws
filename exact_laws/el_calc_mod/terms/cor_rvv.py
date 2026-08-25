@@ -5,7 +5,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class CorRvv(AbstractTerm):
     def __init__(self):
@@ -28,13 +28,15 @@ class CorRvv(AbstractTerm):
         self.expr = (rhoP+rhoNP)*psvv/2 /2  
 
     def calc(
-        self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, **kwarg
+        self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, traj=False, **kwarg
     ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, vx, vy, vz)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz)
 
-    def calc_fourier(self, rho, vx, vy, vz, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz)
+    def calc_fourier(self, rho, vx, vy, vz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, traj=traj)
         
 
     def variables(self) -> List[str]:
@@ -68,14 +70,34 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         vxP, vyP, vzP, vxNP, vyNP, vzNP
     )
 
-def calc_with_fourier(rho, vx, vy, vz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
-    frhovx = ft.fft(rho*vx)
-    frhovy = ft.fft(rho*vy)
-    frhovz = ft.fft(rho*vz)
+@njit
+def calc_in_point_with_sympy_traj(tp, t,
+                                  rho,
+                                  vx, vy, vz,
+                                  f=njit(CorRvv().fct)):
     
-    output = ft.ifft(frhovx*np.conj(fvx) + frhovy*np.conj(fvy) + frhovz*np.conj(fvz)
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+
+    rhoP, rhoNP = rho[tp], rho[t]
+
+    return f(rhoP, rhoNP,
+        vxP, vyP, vzP, vxNP, vyNP, vzNP
+    )
+
+def calc_with_fourier(rho, vx, vy, vz, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
+    frhovx = transform(rho*vx)
+    frhovy = transform(rho*vy)
+    frhovz = transform(rho*vz)
+    
+    output = inv_transform(frhovx*np.conj(fvx) + frhovy*np.conj(fvy) + frhovz*np.conj(fvz)
                     + np.conj(frhovx)*fvx + np.conj(frhovy)*fvy + np.conj(frhovz)*fvz)/4
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)

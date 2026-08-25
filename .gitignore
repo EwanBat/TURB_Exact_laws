@@ -12,3 +12,13 @@ notebooks/
 visualisation.py
 
 visualisation_tools.py
+
+*.h5
+
+*.log
+
+*.png
+
+notebooks/
+
+visualisation/

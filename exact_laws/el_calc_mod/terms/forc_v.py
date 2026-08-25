@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class ForcV(AbstractTerm):
     def __init__(self):
@@ -27,13 +27,14 @@ class ForcV(AbstractTerm):
 
         self.expr =  (rhoNP + rhoP)*(fxP*vxNP + fxNP*vxP + fyP*vyNP + fyNP*vyP + fzP*vzNP + fzNP*vzP)
 
-    def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, fx, fy, fz, **kwarg
-        ) -> List[float]:
+    def calc(self, vector: List[int], cube_size: List[int], rho, vx, vy, vz, fx, fy, fz, traj=False, **kwarg) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, rho, vx, vy, vz, fx, fy, fz)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, rho, vx, vy, vz, fx, fy, fz)
     
-    def calc_fourier(self, rho, vx, vy, vz, fx, fy, fz, **kwarg) -> List:
-        return calc_with_fourier(rho, vx, vy, vz, fx, fy, fz)
+    def calc_fourier(self, rho, vx, vy, vz, fx, fy, fz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(rho, vx, vy, vz, fx, fy, fz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["f", "v", "rho"]
@@ -70,24 +71,44 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         fxP, fyP, fzP, fxNP, fyNP, fzNP
     )
 
-def calc_with_fourier(rho, vx, vy, vz, fx, fy, fz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
-    frhovx = ft.fft(rho*vx)
-    frhovy = ft.fft(rho*vy)
-    frhovz = ft.fft(rho*vz)
+@njit
+def calc_in_point_with_sympy_traj(t, tp, rho, vx, vy, vz, fx, fy, fz, f=njit(ForcV().fct)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+    fxP, fyP, fzP = fx[tp], fy[tp], fz[tp]
+    fxNP, fyNP, fzNP = fx[t], fy[t], fz[t]
+
+    rhoP, rhoNP = rho[tp], rho[t]
+
+    return f(rhoP, rhoNP,
+        vxP, vyP, vzP, vxNP, vyNP, vzNP,
+        fxP, fyP, fzP, fxNP, fyNP, fzNP
+    )
+
+def calc_with_fourier(rho, vx, vy, vz, fx, fy, fz, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
+    frhovx = transform(rho*vx)
+    frhovy = transform(rho*vy)
+    frhovz = transform(rho*vz)
     
-    ffx = ft.fft(fx)
-    ffy = ft.fft(fy)
-    ffz = ft.fft(fz)
-    frhofx = ft.fft(rho*fx)
-    frhofy = ft.fft(rho*fy)
-    frhofz = ft.fft(rho*fz)
+    ffx = transform(fx)
+    ffy = transform(fy)
+    ffz = transform(fz)
+    frhofx = transform(rho*fx)
+    frhofy = transform(rho*fy)
+    frhofz = transform(rho*fz)
     
-    output = ft.ifft(frhofx*np.conj(fvx) + frhofy*np.conj(fvy) + frhofz*np.conj(fvz)
+    output = inv_transform(frhofx*np.conj(fvx) + frhofy*np.conj(fvy) + frhofz*np.conj(fvz)
                    + frhovx*np.conj(ffx) + frhovy*np.conj(ffy) + frhovz*np.conj(ffz)
                    + np.conj(frhofx)*fvx + np.conj(frhofy)*fvy + np.conj(frhofz)*fvz
                    + np.conj(frhovx)*ffx + np.conj(frhovy)*ffy + np.conj(frhovz)*ffz)
+   
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
     

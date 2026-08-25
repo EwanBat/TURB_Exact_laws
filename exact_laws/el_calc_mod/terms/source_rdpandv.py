@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 
 class SourceRdpandv(AbstractTerm):
@@ -51,7 +51,11 @@ class SourceRdpandv(AbstractTerm):
     def calc(self, vector: List[int], cube_size: List[int],
         rho, pperp, ppar, pm, bx, by, bz,
         dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz,
-        **kwarg) -> (float):
+        traj=False, **kwarg) -> (float):
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size,
+                rho, pperp, ppar, pm, bx, by, bz,
+                dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
             rho, pperp, ppar, pm, bx, by, bz,
         dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz)
@@ -98,27 +102,53 @@ def calc_in_point_with_sympy(
             + f(rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, bxNP, byNP, bzNP, bxP, byP, bzP, dxvxNP, dxvyNP, dxvzNP,
                       dyvxNP, dyvyNP, dyvzNP, dzvxNP, dzvyNP, dzvzNP))
 
+@njit
+def calc_in_point_with_sympy_traj(
+    t, tp, rho, pperp, ppar, pm, bx, by, bz, dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz,
+    f=njit(SourceRdpandv().fct)):
+    rhoP, rhoNP = rho[tp], rho[t]
+    pperpP, pparP, pmP = pperp[tp], ppar[tp], pm[tp]
+    pperpNP, pparNP, pmNP = pperp[t], ppar[t], pm[t]
+    bxP, byP, bzP = bx[tp], by[tp], bz[tp]
+    bxNP, byNP, bzNP = bx[t], by[t], bz[t]
+    dxvxP, dxvyP, dxvzP = dxvx[tp], dxvy[tp], dxvz[tp]
+    dyvxP, dyvyP, dyvzP = dyvx[tp], dyvy[tp], dyvz[tp]
+    dzvxP, dzvyP, dzvzP = dzvx[tp], dzvy[tp], dzvz[tp]
+    dxvxNP, dxvyNP, dxvzNP = dxvx[t], dxvy[t], dxvz[t]
+    dyvxNP, dyvyNP, dyvzNP = dyvx[t], dyvy[t], dyvz[t]
+    dzvxNP, dzvyNP, dzvzNP = dzvx[t], dzvy[t], dzvz[t]
+
+    return (f(rhoNP, pperpP, pparP, pmP, pperpNP, pparNP, pmNP, bxP, byP, bzP, bxNP, byNP, bzNP, dxvxP, dxvyP, dxvzP,
+                      dyvxP, dyvyP, dyvzP, dzvxP, dzvyP, dzvzP)
+            + f(rhoP, pperpNP, pparNP, pmNP, pperpP, pparP, pmP, bxNP, byNP, bzNP, bxP, byP, bzP, dxvxNP, dxvyNP, dxvzNP,
+                      dyvxNP, dyvyNP, dyvzNP, dzvxNP, dzvyNP, dzvzNP))
+
 def calc_with_fourier(rho, pperp, ppar, pm, bx, by, bz,
-        dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz):
+    dxvx, dyvx, dzvx, dxvy, dyvy, dzvy, dxvz, dyvz, dzvz, traj=False):
+    transform = ft.fft(rho, traj=traj)
+    inv_transform = ft.ifft(rho, traj=traj)
+
     #A*dB*C' - A'*dB*C = A*B'*C' + A'*B*C - A*B*C' - A'*B'*C
-    fr = ft.fft(rho)
-    fpd = ft.fft((ppar - pperp) / (2*pm) * (bx*bx*dxvx + by*by*dyvy + bz*bz*dzvz 
+    fr = transform(rho)
+    fpd = transform((ppar - pperp) / (2*pm) * (bx*bx*dxvx + by*by*dyvy + bz*bz*dzvz 
                                             + bx*by*(dxvy+dyvx) + bx*bz*(dxvz+dzvx) + by*bz*(dyvz+dzvy)))
-    frpxx = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * bx)
-    frpxy = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * by)
-    frpxz = ft.fft(rho * (ppar - pperp) / (2*pm) * bx * bz)
-    frpyy = ft.fft(rho * (ppar - pperp) / (2*pm) * by * by)
-    frpyz = ft.fft(rho * (ppar - pperp) / (2*pm) * by * bz)
-    frpzz = ft.fft(rho * (ppar - pperp) / (2*pm) * bz * bz)
-    fdxx = ft.fft(dxvx)
-    fdxy = ft.fft(dxvy+dyvx)
-    fdxz = ft.fft(dxvz+dzvx)
-    fdyy = ft.fft(dyvy)
-    fdzz = ft.fft(dzvz)
-    fdyz = ft.fft(dzvy+dyvz)
-    output = ft.ifft(fr*np.conj(fpd) + np.conj(fr)*fpd
+    frpxx = transform(rho * (ppar - pperp) / (2*pm) * bx * bx)
+    frpxy = transform(rho * (ppar - pperp) / (2*pm) * bx * by)
+    frpxz = transform(rho * (ppar - pperp) / (2*pm) * bx * bz)
+    frpyy = transform(rho * (ppar - pperp) / (2*pm) * by * by)
+    frpyz = transform(rho * (ppar - pperp) / (2*pm) * by * bz)
+    frpzz = transform(rho * (ppar - pperp) / (2*pm) * bz * bz)
+    fdxx = transform(dxvx)
+    fdxy = transform(dxvy+dyvx)
+    fdxz = transform(dxvz+dzvx)
+    fdyy = transform(dyvy)
+    fdzz = transform(dzvz)
+    fdyz = transform(dzvy+dyvz)
+    output = inv_transform(fr*np.conj(fpd) + np.conj(fr)*fpd
                    - (frpxx*np.conj(fdxx) + frpyy*np.conj(fdyy) + frpzz*np.conj(fdzz)
                       + frpxy*np.conj(fdxy) + frpxz*np.conj(fdxz) + frpyz*np.conj(fdyz))
                    - (fdxx*np.conj(frpxx) + fdyy*np.conj(frpyy) + fdzz*np.conj(frpzz)
                        + fdxy*np.conj(frpxy) + fdxz*np.conj(frpxz) + fdyz*np.conj(frpyz)))
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)

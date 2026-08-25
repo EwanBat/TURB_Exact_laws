@@ -4,7 +4,7 @@ import sympy as sp
 import numpy as np
 
 from ...mathematical_tools import fourier_transform as ft
-from .abstract_term import AbstractTerm, calc_source_with_numba
+from .abstract_term import AbstractTerm, calc_source_with_numba, calc_source_with_numba_traj
 
 class ForcV(AbstractTerm):
     def __init__(self):
@@ -25,13 +25,15 @@ class ForcV(AbstractTerm):
 
         self.expr =  (fxP*vxNP + fxNP*vxP + fyP*vyNP + fyNP*vyP + fzP*vzNP + fzNP*vzP)
 
-    def calc(self, vector: List[int], cube_size: List[int], vx, vy, vz, fx, fy, fz, **kwarg
+    def calc(self, vector: List[int], cube_size: List[int], vx, vy, vz, fx, fy, fz, traj=False, **kwarg
         ) -> List[float]:
+        if traj:
+            return calc_source_with_numba_traj(calc_in_point_with_sympy_traj, *vector, *cube_size, vx, vy, vz, fx, fy, fz)
         return calc_source_with_numba(
             calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, fx, fy, fz)
     
-    def calc_fourier(self, vx, vy, vz, fx, fy, fz, **kwarg) -> List:
-        return calc_with_fourier(vx, vy, vz, fx, fy, fz)
+    def calc_fourier(self, vx, vy, vz, fx, fy, fz, traj=False, **kwarg) -> List:
+        return calc_with_fourier(vx, vy, vz, fx, fy, fz, traj=traj)
 
     def variables(self) -> List[str]:
         return ["f", "v"]
@@ -64,16 +66,33 @@ def calc_in_point_with_sympy(i, j, k, ip, jp, kp,
         fxP, fyP, fzP, fxNP, fyNP, fzNP
     )
 
-def calc_with_fourier(vx, vy, vz, fx, fy, fz):
-    fvx = ft.fft(vx)
-    fvy = ft.fft(vy)
-    fvz = ft.fft(vz)
+@njit
+def calc_in_point_with_sympy_traj(t, tp, vx, vy, vz, fx, fy, fz, f=njit(ForcV().fct)):
+    vxP, vyP, vzP = vx[tp], vy[tp], vz[tp]
+    vxNP, vyNP, vzNP = vx[t], vy[t], vz[t]
+    fxP, fyP, fzP = fx[tp], fy[tp], fz[tp]
+    fxNP, fyNP, fzNP = fx[t], fy[t], fz[t]
+
+    return f(vxP, vyP, vzP, vxNP, vyNP, vzNP,
+        fxP, fyP, fzP, fxNP, fyNP, fzNP
+    )
+
+def calc_with_fourier(vx, vy, vz, fx, fy, fz, traj=False):
+    transform = ft.fft(vx, traj=traj)
+    inv_transform = ft.ifft(vx, traj=traj)
+
+    fvx = transform(vx)
+    fvy = transform(vy)
+    fvz = transform(vz)
     
-    ffx = ft.fft(fx)
-    ffy = ft.fft(fy)
-    ffz = ft.fft(fz)
+    ffx = transform(fx)
+    ffy = transform(fy)
+    ffz = transform(fz)
     
-    output = ft.ifft(ffx*np.conj(fvx) + ffy*np.conj(fvy) + ffz*np.conj(fvz)
+    output = inv_transform(ffx*np.conj(fvx) + ffy*np.conj(fvy) + ffz*np.conj(fvz)
                    + fvx*np.conj(ffx) + fvy*np.conj(ffy) + fvz*np.conj(ffz))
+   
+    if traj:
+        return output/np.size(output,axis=-1)
     return output/np.size(output)
     

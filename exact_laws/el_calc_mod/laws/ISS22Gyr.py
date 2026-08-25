@@ -15,8 +15,8 @@ class Ss22iGyr(AbstractLaw):
         coeffs["source_dpan"] = physical_params["rho_mean"] / 4
         return self.terms, coeffs
 
-    def variables(self) -> List[str]:
-        return self.list_variables(self.terms)
+    def variables(self, nbsatellite: int = 1, method: str = None) -> List[str]:
+        return self.list_variables(self.terms, nbsatellite=nbsatellite, method=method)
 
 def load():
     return Ss22iGyr()

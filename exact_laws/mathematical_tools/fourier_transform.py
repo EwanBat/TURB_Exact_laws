@@ -1,15 +1,19 @@
 import scipy.fft as scp
 import numpy as np
 
-def fft(tab,way='scipy'): 
+def fft(tab,way='scipy', traj=False): 
+    if traj:
+        return scp.rfft
     if 'scipy' in way:
-        return scp.rfftn(tab)
+        return scp.rfftn
     elif 'numpy' in way:
-        return np.fft.rfftn(tab)
+        return np.fft.rfftn
     
-def ifft(tab,way='scipy'): 
+def ifft(tab,way='scipy', traj=False):
+    if traj:
+        return scp.irfft
     if 'scipy' in way:
-        return scp.irfftn(tab)
+        return scp.irfftn
     elif 'numpy' in way:
-        return np.fft.irfftn(tab)
+        return np.fft.irfftn
 
