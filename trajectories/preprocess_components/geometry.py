@@ -85,9 +85,9 @@ def _compute_trajectory_coordinates(trajectory: np.ndarray,
     np.ndarray
         Physical arc length coordinates, shape (n_points,)
     """
-    lx = np.arange(grid_param['N'][0]) * grid_param['c'][0] - grid_param['L'][0] / 2
-    ly = np.arange(grid_param['N'][1]) * grid_param['c'][1] - grid_param['L'][1] / 2
-    lz = np.arange(grid_param['N'][2]) * grid_param['c'][2] - grid_param['L'][2] / 2
+    lx = np.arange(grid_param['N'][0]) * grid_param['c'][0]
+    ly = np.arange(grid_param['N'][1]) * grid_param['c'][1]
+    lz = np.arange(grid_param['N'][2]) * grid_param['c'][2]
 
     ltraj = tangents[:, 0] * lx[trajectory[:, 0]] + tangents[:, 1] * ly[trajectory[:, 1]] + tangents[:, 2] * lz[trajectory[:, 2]]
     
