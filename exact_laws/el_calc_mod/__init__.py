@@ -75,6 +75,8 @@ def calc_exact_laws_from_config(config_file, run_config, backup):
     #        backup.save(original_dataset, 'data_origin')
     original_dataset, laws, terms = initialise_original_dataset(input_filename)
     original_dataset.check('original_dataset')
+    if method == 'fourier':
+        mod.filter_quantities(original_dataset.quantities)  # TEMPORARY
     
     # Init Incremental_grid
     input_grid = {}

@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 import time
 
-version = "09/07/2022"
+version = "24/03/2026"
 time_start = time.time()
 
 parser = argparse.ArgumentParser()

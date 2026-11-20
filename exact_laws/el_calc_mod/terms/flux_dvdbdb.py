@@ -50,7 +50,21 @@ class FluxDvdbdb(AbstractTerm):
         self.exprz = (dvx * dIbx + dvy * dIby + dvz * dIbz) * dIbz
         
     def calc(self, vector:List[int], cube_size:List[int], vx, vy, vz, Ibx, Iby, Ibz, traj=False, **kwarg) -> List[float]:
-        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, vx, vy, vz, Ibx, Iby, Ibz)
+        dl = np.linalg.norm(vector)
+        order = 4
+        fs = 0.08344855486097888
+        if dl > 2:
+            wn = fs / dl
+        else:
+            wn = fs / 3
+        b, a = butter(order, wn, btype='low', fs=fs)
+        lvx = filtfilt(b, a, vx)
+        lvy = filtfilt(b, a, vy)
+        lvz = filtfilt(b, a, vz)
+        lIbx = filtfilt(b, a, Ibx)
+        lIby = filtfilt(b, a, Iby)
+        lIbz = filtfilt(b, a, Ibz)
+        return calc_flux_with_numba(calc_in_point_with_sympy, *vector, *cube_size, lvx, lvy, lvz, lIbx, lIby, lIbz)
     
     def calc_incr_traj(self, n_points, n_trajectories, vx, vy, vz, Ibx, Iby, Ibz, **kwarg):
         return calc_flux_with_numba_traj(calc_in_point_with_sympy_traj, n_points, n_trajectories, vx, vy, vz, Ibx, Iby, Ibz)

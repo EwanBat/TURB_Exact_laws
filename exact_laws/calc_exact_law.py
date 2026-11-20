@@ -1,9 +1,9 @@
 import logging
 import argparse
 import configparser
-from .running_tools.run_config_wrap import load
-from .running_tools.backup_wrap import Backup
-from .el_calc_mod.__init__ import calc_exact_laws_from_config
+from exact_laws.running_tools.run_config_wrap import load
+from exact_laws.running_tools.backup_wrap import Backup
+from exact_laws.el_calc_mod import calc_exact_laws_from_config
 import time
 time_start = time.time()
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     # configure the saving process (always valid way)
     backup = Backup()
-    backup.configure(eval(config['RUN_PARAMS']['save']), run_config.time_deb, run_config.rank)
+    backup.configure(eval(config['RUN_PARAMS']["save"]), run_config.time_deb, run_config.rank)
 
     message = (f"Run of {__file__} version {version} with setup config:")
     for k in config['RUN_PARAMS']:

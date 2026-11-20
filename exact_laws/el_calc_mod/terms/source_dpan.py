@@ -143,12 +143,35 @@ class SourceDpan(AbstractTerm):
                                     #   dxvx, dyvx, dzvx,
                                     #   dxvy, dyvy, dzvy,
                                     #   dxvz, dyvz, dzvz)
+        dl = np.linalg.norm(vector)
+        order = 4
+        fs = 0.08344855486097888
+        if dl > 2:
+            wn = fs / dl
+        else:
+            wn = fs / 3
+        b, a = butter(order, wn, btype='low', fs=fs)
+        lIbx = filtfilt(b, a, Ibx)
+        lIby = filtfilt(b, a, Iby)
+        lIbz = filtfilt(b, a, Ibz)
+        lIpperp = filtfilt(b, a, Ipperp)
+        lIppar = filtfilt(b, a, Ippar)
+        lIpm = filtfilt(b, a, Ipm)
+        ldxvx = filtfilt(b, a, dxvx)
+        ldyvx = filtfilt(b, a, dyvx)
+        ldzvx = filtfilt(b, a, dzvx)
+        ldxvy = filtfilt(b, a, dxvy)
+        ldyvy = filtfilt(b, a, dyvy)
+        ldzvy = filtfilt(b, a, dzvy)
+        ldxvz = filtfilt(b, a, dxvz)
+        ldyvz = filtfilt(b, a, dyvz)
+        ldzvz = filtfilt(b, a, dzvz)
         return calc_source_with_numba(calc_in_point_with_sympy, *vector, *cube_size,
-                                      Ipperp, Ippar, Ipm,
-                                      Ibx, Iby, Ibz,
-                                      dxvx, dyvx, dzvx,
-                                      dxvy, dyvy, dzvy,
-                                      dxvz, dyvz, dzvz)
+                                      lIpperp, lIppar, lIpm,
+                                      lIbx, lIby, lIbz,
+                                      ldxvx, ldyvx, ldzvx,
+                                      ldxvy, ldyvy, ldzvy,
+                                      ldxvz, ldyvz, ldzvz)
     
     def calc_incr_traj(self, n_points, n_trajectories, Ipperp, Ippar, Ipm,
                        Ibx, Iby, Ibz,

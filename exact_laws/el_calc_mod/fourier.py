@@ -3,12 +3,58 @@ import numpy as np
 import os
 import h5py as h5
 import shutil
+import scipy.fft as scp
 
 from .datasets import load, record_incdataset_to_h5file
 from .grids import load_outputgrid_from_incgrid
 from .terms import TERMS
 from .laws import LAWS
 from .grids import div_on_incgrid, reorganise_quantities, reformat_grid_compatible_to_h5
+
+# ================= TEMPORARY FILTER (remove after tests) =================
+# Spectral low-pass filter for the fourier global evaluation, applied once.
+# FILTER_DL is the minimum scale in grid points: the cutoff frequency is
+# wn = fs/dl (same convention as the trajectory calc_filter), i.e. all modes
+# with a wavelength smaller than FILTER_DL cells are removed.
+#   FILTER_DL   : <user writes the value here>
+#   FILTER_ENABLED : set to False to disable the filter without removing it.
+FILTER_DL = 8
+FILTER_ENABLED = True
+# =========================================================================
+
+def filter_quantities(quantities):
+    """
+    TEMPORARY: apply a spectral low-pass filter once to all 3D quantities.
+
+    Keeps only the modes with wavenumber |k| <= 1/FILTER_DL (in grid units),
+    i.e. scales larger than FILTER_DL cells. The filter is linear, so applying
+    it to gradient fields as well is consistent.
+    """
+    if not FILTER_ENABLED:
+        return
+    shape = None
+    for q in quantities.values():
+        if np.ndim(q) == 3:
+            shape = np.shape(q)
+            break
+    if shape is None:
+        logging.info("TEMPORARY filter: no 3D quantity to filter")
+        return
+    kx = scp.fftfreq(shape[0])
+    ky = scp.fftfreq(shape[1])
+    kz = scp.rfftfreq(shape[2])
+    K = np.sqrt((kx[:, None, None]) ** 2 + (ky[None, :, None]) ** 2 + (kz[None, None, :]) ** 2)
+    mask = K <= 1.0 / FILTER_DL
+    logging.info(f"TEMPORARY spectral low-pass filter applied once with dl={FILTER_DL}")
+    for k, q in quantities.items():
+        if np.ndim(q) == 3:
+            if np.shape(q) != shape:
+                raise ValueError(f"TEMPORARY filter: quantity {k} has shape {np.shape(q)} "
+                                 f"but the mask was built for {shape}")
+            F = scp.rfftn(q)
+            F *= mask
+            quantities[k] = scp.irfftn(F, s=np.shape(q))
+    logging.info("END TEMPORARY spectral low-pass filter")
 
 def initialise_output_dataset(incremental_grid, original_dataset, laws, terms):
     logging.info("INIT Initialisation output data ")
@@ -93,10 +139,10 @@ def apply_method(original_dataset, incremental_grid, coord, laws, terms, output_
         
         output_dataset.params['state']['nb_term_rec'] = output_dataset.params['state']['nb_term_done']
         
-        logging.info("INIT create temporary .h5 file")
+        logging.info("INIT creat temporary .h5 file")
         if run_config.rank == 0:
             shutil.copy2(output_filename,output_filename+'temp')
-        logging.info("END create temporary .h5 file")
+        logging.info("END creat temporary .h5 file")
         
         # ## CALCUL LOI EXACTE
         while output_dataset.params['state']['nb_term_rec'] != output_dataset.params['state']['nb_terms'] :
